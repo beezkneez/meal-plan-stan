@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, AlertTriangle, Package } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Package, Zap } from "lucide-react";
 
 interface PantryItemData {
   id: string;
@@ -34,6 +34,52 @@ const CATEGORIES = [
   "frozen",
   "canned",
   "other",
+];
+
+const QUICK_START_PANTRY = [
+  { name: "Canola oil", category: "oil", unit: "bottle", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Olive oil", category: "oil", unit: "bottle", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Butter", category: "dairy", unit: "lb", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Salt", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Black pepper", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Garlic powder", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Onion powder", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Paprika", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Chili powder", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Italian seasoning", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Cumin", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Cinnamon", category: "spice", unit: "container", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "White rice", category: "grain", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Pasta (spaghetti)", category: "grain", unit: "box", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Pasta (penne)", category: "grain", unit: "box", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Flour (all-purpose)", category: "grain", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Sugar", category: "grain", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Brown sugar", category: "grain", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Oats", category: "grain", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Bread", category: "grain", unit: "loaf", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Tortillas", category: "grain", unit: "pack", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Soy sauce", category: "canned", unit: "bottle", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Ketchup", category: "canned", unit: "bottle", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Mustard", category: "canned", unit: "bottle", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Mayo", category: "canned", unit: "jar", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Hot sauce", category: "canned", unit: "bottle", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Tomato sauce", category: "canned", unit: "can", qtyOnHand: 3, qtyMinimum: 2 },
+  { name: "Diced tomatoes", category: "canned", unit: "can", qtyOnHand: 3, qtyMinimum: 2 },
+  { name: "Chicken broth", category: "canned", unit: "carton", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Canned beans (black)", category: "canned", unit: "can", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Canned beans (kidney)", category: "canned", unit: "can", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Canned corn", category: "canned", unit: "can", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Eggs", category: "dairy", unit: "dozen", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Milk", category: "dairy", unit: "jug", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Cheddar cheese", category: "dairy", unit: "block", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Mozzarella cheese", category: "dairy", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Sour cream", category: "dairy", unit: "tub", qtyOnHand: 1, qtyMinimum: 0 },
+  { name: "Onions", category: "produce", unit: "count", qtyOnHand: 4, qtyMinimum: 2 },
+  { name: "Garlic", category: "produce", unit: "head", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Potatoes", category: "produce", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Frozen chicken breasts", category: "frozen", unit: "bag", qtyOnHand: 1, qtyMinimum: 1 },
+  { name: "Frozen ground beef", category: "frozen", unit: "lb", qtyOnHand: 2, qtyMinimum: 1 },
+  { name: "Frozen vegetables (mixed)", category: "frozen", unit: "bag", qtyOnHand: 2, qtyMinimum: 1 },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -104,6 +150,32 @@ export function PantryTracker() {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
+  const [quickStarting, setQuickStarting] = useState(false);
+
+  async function quickStartPantry() {
+    setQuickStarting(true);
+    try {
+      const existingNames = new Set(items.map((i) => i.name.toLowerCase()));
+      const toAdd = QUICK_START_PANTRY.filter(
+        (p) => !existingNames.has(p.name.toLowerCase())
+      );
+
+      const results = await Promise.all(
+        toAdd.map((item) =>
+          fetch("/api/pantry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(item),
+          }).then((r) => r.json())
+        )
+      );
+
+      setItems((prev) => [...prev, ...results]);
+    } finally {
+      setQuickStarting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-3 py-12 justify-center text-muted-foreground">
@@ -134,10 +206,22 @@ export function PantryTracker() {
         </Card>
       )}
 
-      <Button onClick={() => setShowAdd(!showAdd)}>
-        <Plus className="h-4 w-4 mr-2" />
-        Add Item
-      </Button>
+      <div className="flex gap-3">
+        <Button onClick={() => setShowAdd(!showAdd)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Item
+        </Button>
+        {items.length < 10 && (
+          <Button
+            variant="outline"
+            onClick={quickStartPantry}
+            disabled={quickStarting}
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {quickStarting ? "Adding..." : "Quick Start Pantry"}
+          </Button>
+        )}
+      </div>
 
       {showAdd && (
         <Card className="border-border/60 overflow-hidden">
