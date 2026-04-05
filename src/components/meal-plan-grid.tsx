@@ -20,12 +20,7 @@ import {
   Check,
   Search,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+// Using inline modal instead of Dialog to avoid Base UI compatibility issues
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
@@ -651,14 +646,16 @@ export function MealPlanGrid() {
         </div>
         </div>
       )}
-      {/* Slot editor dialog */}
-      <Dialog open={!!editingSlot} onOpenChange={(open) => !open && setEditingSlot(null)}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-lg">
-              Edit {editingSlot?.mealType} — {editingSlot?.date ? format(new Date(editingSlot.date.split("T")[0] + "T12:00:00"), "EEE, MMM d") : ""}
-            </DialogTitle>
-          </DialogHeader>
+      {/* Slot editor modal */}
+      {editingSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-xs" onClick={() => setEditingSlot(null)} />
+          <div className="relative z-10 w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto rounded-xl bg-popover p-5 shadow-xl ring-1 ring-foreground/10 space-y-4">
+            <div>
+              <h3 className="font-display text-lg font-semibold">
+                Edit {editingSlot.mealType} — {format(new Date(editingSlot.date.split("T")[0] + "T12:00:00"), "EEE, MMM d")}
+              </h3>
+            </div>
 
           {/* Mode toggle */}
           <div className="flex gap-2">
@@ -752,8 +749,9 @@ export function MealPlanGrid() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
