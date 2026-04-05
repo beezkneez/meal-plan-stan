@@ -30,6 +30,7 @@ const navItems = [
   { href: "/meal-plan", label: "Meal Plan", icon: ClipboardList },
   { href: "/pantry", label: "Pantry", icon: Package },
   { href: "/shopping-list", label: "Shopping List", icon: ShoppingCart },
+  { href: "/calendars", label: "Calendars", icon: CalendarDays },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

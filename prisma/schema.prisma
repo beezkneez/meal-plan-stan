@@ -51,13 +51,14 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  accounts    Account[]
-  sessions    Session[]
-  schedule    Schedule?
-  preferences UserPreferences?
-  recipes     Recipe[]
-  mealPlans   MealPlan[]
-  pantryItems PantryItem[]
+  accounts       Account[]
+  sessions       Session[]
+  schedule       Schedule?
+  preferences    UserPreferences?
+  calendarSyncs  CalendarSync[]
+  recipes        Recipe[]
+  mealPlans      MealPlan[]
+  pantryItems    PantryItem[]
 }
 
 // ── User Preferences ──
@@ -182,4 +183,22 @@ model PantryItem {
   qtyMinimum Float @default(0)
 
   updatedAt DateTime @updatedAt
+}
+
+// ── Google Calendar Sync ──
+
+model CalendarSync {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  googleCalendarId String // e.g. "primary", "abc123@group.calendar.google.com"
+  calendarName     String
+  color            String  @default("#4285f4")
+  enabled          Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, googleCalendarId])
 }
