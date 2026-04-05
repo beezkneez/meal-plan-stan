@@ -77,6 +77,8 @@ export function RecipeDiscovery() {
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
 
   async function search(q?: string) {
     const searchQuery = q ?? query;
@@ -85,12 +87,14 @@ export function RecipeDiscovery() {
     setSearching(true);
     setApproved(new Set());
     setDismissed(new Set());
+    setPage(0);
 
     try {
       const params = new URLSearchParams({
         q: searchQuery,
         mealType,
         source: "both",
+        offset: "0",
       });
       const res = await fetch(`/api/discover?${params}`);
       if (res.ok) {
@@ -99,6 +103,34 @@ export function RecipeDiscovery() {
       }
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function loadMore() {
+    const searchQuery = query;
+    if (!searchQuery.trim()) return;
+
+    setLoadingMore(true);
+    const nextPage = page + 1;
+
+    try {
+      const params = new URLSearchParams({
+        q: searchQuery,
+        mealType,
+        source: "both",
+        offset: String(nextPage * 10),
+      });
+      const res = await fetch(`/api/discover?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        const newRecipes = data.recipes ?? [];
+        if (newRecipes.length > 0) {
+          setRecipes((prev) => [...prev, ...newRecipes]);
+          setPage(nextPage);
+        }
+      }
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -424,6 +456,28 @@ export function RecipeDiscovery() {
                 </Card>
               );
             })}
+          </div>
+
+          {/* Find More button */}
+          <div className="flex justify-center pt-4">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={loadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? (
+                <>
+                  <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  Finding more...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Find More Recipes
+                </>
+              )}
+            </Button>
           </div>
         </div>
       )}

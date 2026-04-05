@@ -46,7 +46,8 @@ interface SpoonacularResult {
 export async function searchSpoonacular(
   query: string,
   mealType?: string,
-  count: number = 6
+  count: number = 6,
+  offset: number = 0
 ): Promise<DiscoveredRecipe[]> {
   const apiKey = process.env.SPOONACULAR_API_KEY;
   if (!apiKey) return [];
@@ -54,6 +55,7 @@ export async function searchSpoonacular(
   const params = new URLSearchParams({
     query,
     number: String(count),
+    offset: String(offset),
     addRecipeNutrition: "true",
     fillIngredients: "true",
     addRecipeInstructions: "true",
@@ -149,7 +151,8 @@ export async function generateAIRecipes(
     householdSize?: number;
   },
   mealType: string,
-  count: number = 4
+  count: number = 4,
+  offset: number = 0
 ): Promise<DiscoveredRecipe[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return [];
@@ -169,7 +172,9 @@ export async function generateAIRecipes(
       ? `Dietary needs: ${preferences.dietaryNeeds.join(", ")}.`
       : "";
 
-  const prompt = `Generate ${count} unique, practical ${mealType} recipes for a household of ${preferences.householdSize ?? 4} people.
+  const batchLabel = offset > 0 ? ` (batch ${Math.floor(offset / 10) + 1} — give completely different recipes than you would normally suggest, get creative)` : "";
+
+  const prompt = `Generate ${count} unique, practical ${mealType} recipes for a household of ${preferences.householdSize ?? 4} people.${batchLabel}
 
 Eating style: ${preferences.eatingStyle ?? "balanced"}
 ${dislikesStr}

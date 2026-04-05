@@ -15,7 +15,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const query = searchParams.get("q") ?? "family dinner";
   const mealType = searchParams.get("mealType") ?? "dinner";
-  const source = searchParams.get("source") ?? "both"; // "spoonacular" | "ai" | "both"
+  const source = searchParams.get("source") ?? "both";
+  const offset = parseInt(searchParams.get("offset") ?? "0", 10);
 
   // Load user preferences for AI generation
   const prefs = await prisma.userPreferences.findUnique({
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
   let recipes: Awaited<ReturnType<typeof searchSpoonacular>> = [];
 
   if (source === "spoonacular" || source === "both") {
-    const spoonResults = await searchSpoonacular(query, mealType, 6);
+    const spoonResults = await searchSpoonacular(query, mealType, 6, offset);
     recipes.push(...spoonResults);
   }
 
@@ -43,7 +44,8 @@ export async function GET(req: Request) {
     const aiResults = await generateAIRecipes(
       preferences,
       mealType,
-      source === "ai" ? 6 : 4
+      source === "ai" ? 6 : 4,
+      offset
     );
     recipes.push(...aiResults);
   }
