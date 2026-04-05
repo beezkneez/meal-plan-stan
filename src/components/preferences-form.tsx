@@ -90,6 +90,8 @@ const DIETARY_NEEDS = [
 
 interface Prefs {
   householdSize: number;
+  householdSizeWorkDay: number;
+  leftoverServings: number;
   eatingStyle: string;
   dislikes: string;
   allergies: string;
@@ -102,6 +104,8 @@ interface Prefs {
 
 const DEFAULTS: Prefs = {
   householdSize: 4,
+  householdSizeWorkDay: 2,
+  leftoverServings: 2,
   eatingStyle: "balanced",
   dislikes: "[]",
   allergies: "[]",
@@ -168,6 +172,8 @@ export function PreferencesForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           householdSize: prefs.householdSize,
+          householdSizeWorkDay: prefs.householdSizeWorkDay,
+          leftoverServings: prefs.leftoverServings,
           eatingStyle: prefs.eatingStyle,
           dislikes: prefs.dislikes,
           allergies: prefs.allergies,
@@ -203,10 +209,10 @@ export function PreferencesForm() {
             <CardTitle className="font-display text-xl">Household</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="pt-5 space-y-3">
+        <CardContent className="pt-5 space-y-4">
           <div>
             <label className="text-sm font-medium">
-              How many people are you cooking for?
+              How many people are you cooking for? (days off)
             </label>
             <Input
               type="number"
@@ -217,6 +223,42 @@ export function PreferencesForm() {
                 setPrefs({ ...prefs, householdSize: Number(e.target.value) })
               }
               className="w-24 mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">
+              How many eat at home when you&apos;re working?
+            </label>
+            <p className="text-xs text-muted-foreground mb-1">
+              e.g. partner + kids who still need dinner while you&apos;re on shift
+            </p>
+            <Input
+              type="number"
+              min={0}
+              max={12}
+              value={prefs.householdSizeWorkDay}
+              onChange={(e) =>
+                setPrefs({ ...prefs, householdSizeWorkDay: Number(e.target.value) })
+              }
+              className="w-24"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">
+              Extra leftover servings to pack
+            </label>
+            <p className="text-xs text-muted-foreground mb-1">
+              How many leftover portions for next-day lunches?
+            </p>
+            <Input
+              type="number"
+              min={0}
+              max={8}
+              value={prefs.leftoverServings}
+              onChange={(e) =>
+                setPrefs({ ...prefs, leftoverServings: Number(e.target.value) })
+              }
+              className="w-24"
             />
           </div>
         </CardContent>

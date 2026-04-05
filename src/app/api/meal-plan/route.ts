@@ -122,6 +122,8 @@ export async function POST(req: Request) {
     recipes,
     calendarEvents,
     householdSize: prefs?.householdSize ?? householdSize,
+    householdSizeWorkDay: prefs?.householdSizeWorkDay ?? 2,
+    leftoverServings: prefs?.leftoverServings ?? 2,
     leftoverWorkMeals,
     targetProteinPerDay: 150,
     lunchDays,

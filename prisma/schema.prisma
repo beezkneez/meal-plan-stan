@@ -68,8 +68,10 @@ model UserPreferences {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  householdSize Int    @default(4)
-  eatingStyle   String @default("balanced") // "balanced","healthy","bulking","budget","keto","family"
+  householdSize       Int    @default(4)
+  householdSizeWorkDay Int   @default(2) // how many eat at home when you're at work
+  leftoverServings    Int    @default(2) // extra servings to pack as leftovers
+  eatingStyle         String @default("balanced") // "balanced","healthy","bulking","budget","keto","family"
   // JSON arrays
   dislikes      String @default("[]") // ["mushrooms","olives",...]
   allergies     String @default("[]") // ["gluten","dairy","nuts",...]
