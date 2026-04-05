@@ -3,10 +3,18 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { RefreshCw, LinkIcon, ChefHat, Utensils } from "lucide-react";
-import { format } from "date-fns";
+import {
+  RefreshCw,
+  LinkIcon,
+  ChefHat,
+  Utensils,
+  SlidersHorizontal,
+  Calendar,
+} from "lucide-react";
+import { format, addDays } from "date-fns";
 
 interface MealSlotData {
   id: string;
@@ -38,13 +46,21 @@ const MEAL_COLORS: Record<string, string> = {
   dinner: "border-l-terracotta",
 };
 
+const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export function MealPlanGrid() {
   const [plan, setPlan] = useState<MealPlanData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [showBuilder, setShowBuilder] = useState(false);
+
+  // Builder settings
   const [startDate, setStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [ownRecipeRatio, setOwnRecipeRatio] = useState(60);
+  const [lunchDays, setLunchDays] = useState<number[]>([0, 6]); // Sun, Sat by default
+  const [includBreakfast, setIncludeBreakfast] = useState(true);
 
   useEffect(() => {
     fetch("/api/meal-plan")
@@ -53,6 +69,14 @@ export function MealPlanGrid() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  function toggleLunchDay(dayIndex: number) {
+    setLunchDays((prev) =>
+      prev.includes(dayIndex)
+        ? prev.filter((d) => d !== dayIndex)
+        : [...prev, dayIndex]
+    );
+  }
 
   async function generatePlan() {
     setGenerating(true);
@@ -65,11 +89,15 @@ export function MealPlanGrid() {
           days: 16,
           householdSize: 4,
           leftoverWorkMeals: true,
+          ownRecipeRatio,
+          lunchDays,
+          includeBreakfast: includBreakfast,
         }),
       });
       if (res.ok) {
         const data = await res.json();
         setPlan(data);
+        setShowBuilder(false);
       }
     } finally {
       setGenerating(false);
@@ -98,22 +126,150 @@ export function MealPlanGrid() {
   const mealTypes = ["breakfast", "lunch", "dinner"];
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          className="w-52"
-        />
-        <Button onClick={generatePlan} disabled={generating}>
-          <RefreshCw
-            className={cn("h-4 w-4 mr-2", generating && "animate-spin")}
-          />
-          {generating ? "Generating..." : "Generate 16-Day Plan"}
-        </Button>
-      </div>
+    <div className="space-y-6">
+      {/* Builder toggle */}
+      <Button
+        variant={showBuilder ? "default" : "outline"}
+        onClick={() => setShowBuilder(!showBuilder)}
+      >
+        <SlidersHorizontal className="h-4 w-4 mr-2" />
+        {showBuilder ? "Hide Builder" : "Build a Meal Plan"}
+      </Button>
 
+      {/* Builder panel */}
+      {showBuilder && (
+        <Card className="border-border/60 overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-accent/40 to-transparent pb-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              <CardTitle className="font-display text-xl">
+                Plan Builder
+              </CardTitle>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Configure your 16-day meal plan. Stan will use your schedule,
+              preferences, and calendar to build it.
+            </p>
+          </CardHeader>
+          <CardContent className="pt-5 space-y-6">
+            {/* Start date */}
+            <div>
+              <label className="text-sm font-medium">Start Date</label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-52 mt-1"
+              />
+            </div>
+
+            {/* Recipe ratio slider */}
+            <div>
+              <label className="text-sm font-medium">Recipe Mix</label>
+              <p className="text-xs text-muted-foreground mb-3">
+                How much of the plan should use your saved recipes vs. new
+                suggestions?
+              </p>
+              <div className="space-y-2">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={10}
+                  value={ownRecipeRatio}
+                  onChange={(e) => setOwnRecipeRatio(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <div className="flex justify-between text-xs">
+                  <span
+                    className={cn(
+                      "font-medium",
+                      ownRecipeRatio >= 50
+                        ? "text-primary"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {ownRecipeRatio}% Your recipes
+                  </span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      ownRecipeRatio < 50
+                        ? "text-terracotta"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {100 - ownRecipeRatio}% New suggestions
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground/70">
+                  {ownRecipeRatio === 100
+                    ? "Only your saved recipes will be used."
+                    : ownRecipeRatio === 0
+                      ? "All meals will be new suggestions for you to approve."
+                      : "New suggestions will need your approval before being added to your recipe book."}
+                </p>
+              </div>
+            </div>
+
+            {/* Lunch day picker */}
+            <div>
+              <label className="text-sm font-medium">Lunch Days</label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Which days do you want lunch planned? Work night dinners are
+                auto-detected from your schedule. Leftovers can be packed for
+                shifts too.
+              </p>
+              <div className="flex gap-2">
+                {DAYS_OF_WEEK.map((day, i) => (
+                  <button
+                    key={day}
+                    onClick={() => toggleLunchDay(i)}
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-xl border-2 text-xs font-semibold transition-all duration-200",
+                      lunchDays.includes(i)
+                        ? "border-sage bg-sage/10 text-sage"
+                        : "border-border/60 text-muted-foreground hover:border-sage/30"
+                    )}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Breakfast toggle */}
+            <div>
+              <button
+                onClick={() => setIncludeBreakfast(!includBreakfast)}
+                className={cn(
+                  "rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-all duration-200",
+                  includBreakfast
+                    ? "border-amber-warm bg-amber-warm/10 text-amber-deep"
+                    : "border-border/60 text-muted-foreground hover:border-amber-warm/30"
+                )}
+              >
+                Include breakfast
+              </button>
+            </div>
+
+            {/* Generate button */}
+            <Button
+              onClick={generatePlan}
+              disabled={generating}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw
+                className={cn("h-4 w-4 mr-2", generating && "animate-spin")}
+              />
+              {generating ? "Generating..." : "Generate 16-Day Plan"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Existing plan display */}
       {!plan ? (
         <Card className="border-border/60 border-dashed">
           <CardContent className="py-14 text-center">
@@ -125,7 +281,8 @@ export function MealPlanGrid() {
               No meal plan yet
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Set your schedule and add some recipes first, then generate a plan.
+              Click &ldquo;Build a Meal Plan&rdquo; above to configure and
+              generate your first plan.
             </p>
           </CardContent>
         </Card>

@@ -23,7 +23,17 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import type { ScrapedRecipe } from "@/types";
+
+const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
+
+const MEAL_TYPE_COLORS: Record<string, string> = {
+  breakfast: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  lunch: "bg-sage/15 text-sage border-sage/25",
+  dinner: "bg-terracotta/15 text-terracotta border-terracotta/25",
+  snack: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
+};
 
 interface Recipe {
   id: string;
@@ -35,6 +45,7 @@ interface Recipe {
   calories?: number;
   proteinG?: number;
   tags: string;
+  mealTypes: string;
   isQuick: boolean;
 }
 
@@ -114,6 +125,7 @@ export function RecipeList() {
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {recipes.map((recipe) => {
             const tags: string[] = JSON.parse(recipe.tags);
+            const mealTypes: string[] = JSON.parse(recipe.mealTypes ?? '["dinner"]');
             return (
               <Card
                 key={recipe.id}
@@ -178,6 +190,14 @@ export function RecipeList() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
+                    {mealTypes.map((mt) => (
+                      <Badge
+                        key={mt}
+                        className={`text-xs font-medium capitalize ${MEAL_TYPE_COLORS[mt] ?? ""}`}
+                      >
+                        {mt}
+                      </Badge>
+                    ))}
                     {recipe.isQuick && (
                       <Badge className="bg-sage/20 text-sage border-sage/30 text-xs font-medium">
                         Quick
@@ -220,6 +240,7 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
   const [scraped, setScraped] = useState<ScrapedRecipe | null>(null);
   const [error, setError] = useState("");
+  const [selectedMealTypes, setSelectedMealTypes] = useState<string[]>(["dinner"]);
 
   async function handleScrape() {
     setError("");
@@ -250,7 +271,7 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
       const res = await fetch("/api/recipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scraped),
+        body: JSON.stringify({ ...scraped, mealTypes: selectedMealTypes }),
       });
       if (res.ok) onSaved();
     } finally {
@@ -419,10 +440,43 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
             ))}
           </div>
         )}
+
+        <div>
+          <label className="text-sm font-medium">Meal Type</label>
+          <p className="text-xs text-muted-foreground mb-2">
+            When would you make this? Select all that apply.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {MEAL_TYPES.map((mt) => {
+              const active = selectedMealTypes.includes(mt);
+              return (
+                <button
+                  key={mt}
+                  type="button"
+                  onClick={() =>
+                    setSelectedMealTypes((prev) =>
+                      active
+                        ? prev.filter((m) => m !== mt)
+                        : [...prev, mt]
+                    )
+                  }
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-sm font-medium capitalize transition-all duration-200",
+                    active
+                      ? MEAL_TYPE_COLORS[mt]
+                      : "border-border/60 text-muted-foreground hover:border-primary/30"
+                  )}
+                >
+                  {mt}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-2">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving || selectedMealTypes.length === 0}>
           {saving ? "Saving..." : "Save Recipe"}
         </Button>
         <Button variant="outline" onClick={() => setScraped(null)}>

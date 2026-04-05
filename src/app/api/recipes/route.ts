@@ -63,6 +63,7 @@ export async function POST(req: Request) {
       ingredients: JSON.stringify(body.ingredients ?? []),
       steps: JSON.stringify(body.steps ?? []),
       tags: JSON.stringify(body.tags ?? []),
+      mealTypes: JSON.stringify(body.mealTypes ?? ["dinner"]),
       isQuick,
       isSlowCook,
       leftoverFriendly: body.leftoverFriendly ?? true,
