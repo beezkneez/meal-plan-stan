@@ -213,7 +213,6 @@ export function RecipeDiscovery() {
       <div className="flex flex-wrap gap-2">
         {[
           { value: "both", label: "All Sources" },
-          { value: "hellofresh", label: "HelloFresh" },
           { value: "spoonacular", label: "Web Recipes" },
           { value: "ai", label: "AI Generated" },
         ].map((s) => (
@@ -299,20 +298,13 @@ export function RecipeDiscovery() {
                             "text-[10px] font-medium",
                             recipe.source === "ai"
                               ? "bg-indigo-shift/80 text-white"
-                              : recipe.source === "hellofresh"
-                                ? "bg-green-600/80 text-white"
-                                : "bg-black/60 text-white"
+                              : "bg-black/60 text-white"
                           )}
                         >
                           {recipe.source === "ai" ? (
                             <>
                               <Bot className="h-3 w-3 mr-1" />
                               AI
-                            </>
-                          ) : recipe.source === "hellofresh" ? (
-                            <>
-                              <ChefHat className="h-3 w-3 mr-1" />
-                              HelloFresh
                             </>
                           ) : (
                             <>
