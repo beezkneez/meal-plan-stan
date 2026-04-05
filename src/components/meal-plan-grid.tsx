@@ -13,7 +13,10 @@ import {
   Utensils,
   SlidersHorizontal,
   Calendar,
+  AlertTriangle,
+  Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { format, addDays } from "date-fns";
 
 interface MealSlotData {
@@ -61,6 +64,7 @@ export function MealPlanGrid() {
   const [ownRecipeRatio, setOwnRecipeRatio] = useState(60);
   const [lunchDays, setLunchDays] = useState<number[]>([0, 6]); // Sun, Sat by default
   const [includBreakfast, setIncludeBreakfast] = useState(true);
+  const [recipeCount, setRecipeCount] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/meal-plan")
@@ -68,6 +72,11 @@ export function MealPlanGrid() {
       .then((data) => setPlan(data))
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    fetch("/api/recipes")
+      .then((r) => r.json())
+      .then((data) => setRecipeCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => {});
   }, []);
 
   function toggleLunchDay(dayIndex: number) {
@@ -152,6 +161,28 @@ export function MealPlanGrid() {
             </p>
           </CardHeader>
           <CardContent className="pt-5 space-y-6">
+            {/* Recipe count warning */}
+            {recipeCount !== null && recipeCount < 10 && (
+              <div className="flex items-start gap-3 rounded-xl border border-amber-warm/40 bg-amber-warm/10 p-4">
+                <AlertTriangle className="h-5 w-5 text-amber-deep shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">
+                    You only have {recipeCount} recipe{recipeCount !== 1 ? "s" : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    For a good 16-day plan with variety, aim for at least 10-15 recipes.
+                    Head to Discover to find and approve new ones quickly.
+                  </p>
+                  <Link href="/discover">
+                    <Button variant="outline" size="sm" className="mt-2">
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      Discover Recipes
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {/* Start date */}
             <div>
               <label className="text-sm font-medium">Start Date</label>

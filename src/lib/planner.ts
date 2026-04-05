@@ -311,14 +311,25 @@ function pickRecipe(
     if (under45.length > 0) candidates = under45;
   }
 
-  // Score each candidate
-  const scored = candidates.map((recipe) => {
+  // Sort by least-recently-used first for maximum variety
+  const sorted = [...candidates].sort((a, b) => {
+    const aLast = recentlyUsed.get(a.id) ?? -999;
+    const bLast = recentlyUsed.get(b.id) ?? -999;
+    return aLast - bLast; // least recently used first
+  });
+
+  // With few recipes, just strictly rotate through them
+  if (candidates.length <= 5) {
+    return sorted[0];
+  }
+
+  // With more recipes, use scoring for smarter picks
+  const scored = sorted.map((recipe) => {
     const daysSinceUsed = recentlyUsed.has(recipe.id)
       ? currentDay - recentlyUsed.get(recipe.id)!
-      : 16; // never used = max variety
+      : 16;
 
-    // Heavily penalize recently used recipes
-    const varietyScore = daysSinceUsed <= 1 ? 0 : Math.min(daysSinceUsed / 8, 1);
+    const varietyScore = daysSinceUsed <= 1 ? 0 : Math.min(daysSinceUsed / 6, 1);
 
     const proteinScore =
       recipe.proteinG != null && targetProtein > 0
@@ -331,19 +342,18 @@ function pickRecipe(
       busyness === "busy" && (recipe.isQuick || recipe.isSlowCook) ? 1 : 0.7;
 
     const score =
-      varietyScore * 0.4 +
-      proteinScore * 0.25 +
-      leftoverScore * 0.2 +
-      quickScore * 0.15;
+      varietyScore * 0.45 +
+      proteinScore * 0.2 +
+      leftoverScore * 0.15 +
+      quickScore * 0.2;
 
     return { recipe, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Weighted random from top candidates (more variety)
-  const topCount = Math.min(4, scored.length);
-  const top = scored.slice(0, topCount);
+  // Pick from top 3 with some randomness
+  const top = scored.slice(0, Math.min(3, scored.length));
   const totalWeight = top.reduce((sum, s) => sum + s.score, 0);
   let random = Math.random() * totalWeight;
   for (const entry of top) {
