@@ -23,7 +23,7 @@ import {
 // Using inline modal instead of Dialog to avoid Base UI compatibility issues
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
 
 interface MealSlotData {
   id: string;
@@ -512,8 +512,8 @@ export function MealPlanGrid() {
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             {plan.slots.length} meals planned &middot;{" "}
-            {format(new Date(plan.startDate + "T12:00:00"), "MMM d")} &ndash;{" "}
-            {format(new Date(plan.endDate + "T12:00:00"), "MMM d")}
+            {format(new Date(plan.startDate), "MMM d")} &ndash;{" "}
+            {format(new Date(plan.endDate), "MMM d")}
           </p>
           <Button
             variant="outline"
