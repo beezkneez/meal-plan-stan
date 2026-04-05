@@ -314,7 +314,21 @@ function classifyBusyness(
   const dateStr = date.toISOString().split("T")[0];
   const dayEvents = events.filter((e) => e.start.startsWith(dateStr));
 
-  if (shift === "OFF" && dayEvents.length === 0) return "free";
-  if (shift === "OFF" && dayEvents.length > 0) return "moderate";
-  return "busy";
+  // Check for evening events (after 4pm) - these make dinner time tight
+  const eveningEvents = dayEvents.filter((e) => {
+    if (!e.start.includes("T")) return false; // all-day events don't count
+    const hour = parseInt(e.start.split("T")[1]?.split(":")[0] ?? "0", 10);
+    return hour >= 16;
+  });
+
+  // Work shifts are always busy
+  if (shift === "DAY" || shift === "NIGHT") return "busy";
+
+  // Off day with evening activities (sports, appointments) = moderate
+  if (eveningEvents.length > 0) return "moderate";
+
+  // Off day with lots of events = moderate
+  if (dayEvents.length >= 2) return "moderate";
+
+  return "free";
 }

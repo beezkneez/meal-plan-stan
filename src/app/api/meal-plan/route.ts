@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateMealPlan } from "@/lib/planner";
-import type { ScheduleDay } from "@/types";
+import {
+  getGoogleAccessToken,
+  fetchCalendarEvents,
+} from "@/lib/google-calendar";
+import type { ScheduleDay, CalendarEvent } from "@/types";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -73,13 +77,49 @@ export async function POST(req: Request) {
 
   const pattern: ScheduleDay[] = JSON.parse(schedule.pattern);
 
+  // Fetch Google Calendar events for the plan period
+  let calendarEvents: CalendarEvent[] = [];
+  try {
+    const accessToken = await getGoogleAccessToken(session.user.id);
+    if (accessToken) {
+      const syncedCals = await prisma.calendarSync.findMany({
+        where: { userId: session.user.id, enabled: true },
+      });
+
+      const planStart = new Date(startDate);
+      const planEnd = new Date(startDate);
+      planEnd.setDate(planEnd.getDate() + days);
+
+      const allEvents = await Promise.all(
+        syncedCals.map((cal) =>
+          fetchCalendarEvents(
+            accessToken,
+            cal.googleCalendarId,
+            planStart.toISOString(),
+            planEnd.toISOString()
+          )
+        )
+      );
+
+      calendarEvents = allEvents.flat().map((e) => ({
+        id: e.id,
+        title: e.summary ?? "",
+        start: e.start?.dateTime ?? e.start?.date ?? "",
+        end: e.end?.dateTime ?? e.end?.date ?? "",
+        allDay: !e.start?.dateTime,
+      }));
+    }
+  } catch {
+    // Calendar fetch failed, continue without events
+  }
+
   const plannedSlots = generateMealPlan({
     startDate: new Date(startDate),
     days,
     schedule: pattern,
     anchorDate: schedule.anchorDate,
     recipes,
-    calendarEvents: [],
+    calendarEvents,
     householdSize: prefs?.householdSize ?? householdSize,
     leftoverWorkMeals,
     targetProteinPerDay: 150,
