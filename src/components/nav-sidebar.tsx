@@ -14,6 +14,7 @@ import {
   LogIn,
   LogOut,
   Flame,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/meal-plan", label: "Meal Plan", icon: ClipboardList },
   { href: "/pantry", label: "Pantry", icon: Package },
   { href: "/shopping-list", label: "Shopping List", icon: ShoppingCart },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 function BrandMark() {

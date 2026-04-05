@@ -54,9 +54,33 @@ model User {
   accounts    Account[]
   sessions    Session[]
   schedule    Schedule?
+  preferences UserPreferences?
   recipes     Recipe[]
   mealPlans   MealPlan[]
   pantryItems PantryItem[]
+}
+
+// ── User Preferences ──
+
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  householdSize Int    @default(4)
+  eatingStyle   String @default("balanced") // "balanced","healthy","bulking","budget","keto","family"
+  // JSON arrays
+  dislikes      String @default("[]") // ["mushrooms","olives",...]
+  allergies     String @default("[]") // ["gluten","dairy","nuts",...]
+  dietaryNeeds  String @default("[]") // ["high-protein","low-carb","vegetarian",...]
+
+  preferQuickMeals  Boolean @default(false)
+  preferSlowCooker  Boolean @default(false)
+  preferLeftovers   Boolean @default(true)
+  maxPrepMinutes    Int     @default(60)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ── 16-Day Rotation ──
