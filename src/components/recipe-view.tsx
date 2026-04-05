@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Clock,
   Flame,
@@ -16,8 +17,13 @@ import {
   Droplets,
   Minus,
   Plus,
+  Pencil,
+  Save,
+  X,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { RecipeIngredient } from "@/types";
 
@@ -37,18 +43,69 @@ interface RecipeData {
   ingredients: string;
   steps: string;
   tags: string;
+  mealTypes: string;
+  role: string;
   isQuick: boolean;
   isSlowCook: boolean;
   leftoverFriendly: boolean;
 }
 
+const RECIPE_ROLES = [
+  { value: "complete", label: "Complete" },
+  { value: "main", label: "Main" },
+  { value: "side", label: "Side" },
+  { value: "veggie", label: "Veggie" },
+  { value: "soup", label: "Soup" },
+  { value: "salad", label: "Salad" },
+];
+
+const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
+
+const ROLE_COLORS: Record<string, string> = {
+  complete: "bg-primary/10 text-primary border-primary/20",
+  main: "bg-terracotta/15 text-terracotta border-terracotta/25",
+  side: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  veggie: "bg-sage/15 text-sage border-sage/25",
+  soup: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
+  salad: "bg-sage/15 text-sage border-sage/25",
+};
+
+const MEAL_TYPE_COLORS: Record<string, string> = {
+  breakfast: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  lunch: "bg-sage/15 text-sage border-sage/25",
+  dinner: "bg-terracotta/15 text-terracotta border-terracotta/25",
+  snack: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
+};
+
 export function RecipeView({ id }: { id: string }) {
+  const router = useRouter();
   const [recipe, setRecipe] = useState<RecipeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(
     new Set()
   );
   const [adjustedServings, setAdjustedServings] = useState<number | null>(null);
+
+  // Edit mode
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editData, setEditData] = useState<{
+    title: string;
+    prepMinutes: number;
+    cookMinutes: number;
+    servings: number;
+    calories?: number;
+    proteinG?: number;
+    carbsG?: number;
+    fatG?: number;
+    ingredients: RecipeIngredient[];
+    steps: string[];
+    tags: string[];
+    mealTypes: string[];
+    role: string;
+    sourceUrl?: string;
+    imageUrl?: string;
+  } | null>(null);
 
   useEffect(() => {
     fetch(`/api/recipes/${id}`)
@@ -57,6 +114,119 @@ export function RecipeView({ id }: { id: string }) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
+
+  function startEditing() {
+    if (!recipe) return;
+    setEditData({
+      title: recipe.title,
+      prepMinutes: recipe.prepMinutes,
+      cookMinutes: recipe.cookMinutes,
+      servings: recipe.servings,
+      calories: recipe.calories,
+      proteinG: recipe.proteinG,
+      carbsG: recipe.carbsG,
+      fatG: recipe.fatG,
+      ingredients: JSON.parse(recipe.ingredients),
+      steps: JSON.parse(recipe.steps),
+      tags: JSON.parse(recipe.tags),
+      mealTypes: JSON.parse(recipe.mealTypes ?? '["dinner"]'),
+      role: recipe.role ?? "complete",
+      sourceUrl: recipe.sourceUrl,
+      imageUrl: recipe.imageUrl,
+    });
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setEditing(false);
+    setEditData(null);
+  }
+
+  async function saveEdits() {
+    if (!editData) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/recipes/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editData),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRecipe(updated);
+        setEditing(false);
+        setEditData(null);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteRecipe() {
+    if (!confirm("Delete this recipe?")) return;
+    await fetch(`/api/recipes/${id}`, { method: "DELETE" });
+    router.push("/recipes");
+  }
+
+  function updateIngredient(
+    index: number,
+    field: keyof RecipeIngredient,
+    value: string | number | null
+  ) {
+    if (!editData) return;
+    const updated = [...editData.ingredients];
+    updated[index] = { ...updated[index], [field]: value };
+    setEditData({ ...editData, ingredients: updated });
+  }
+
+  function removeIngredient(index: number) {
+    if (!editData) return;
+    setEditData({
+      ...editData,
+      ingredients: editData.ingredients.filter((_, i) => i !== index),
+    });
+  }
+
+  function addIngredient() {
+    if (!editData) return;
+    setEditData({
+      ...editData,
+      ingredients: [
+        ...editData.ingredients,
+        { name: "", qty: null, unit: "" },
+      ],
+    });
+  }
+
+  function updateStep(index: number, value: string) {
+    if (!editData) return;
+    const updated = [...editData.steps];
+    updated[index] = value;
+    setEditData({ ...editData, steps: updated });
+  }
+
+  function removeStep(index: number) {
+    if (!editData) return;
+    setEditData({
+      ...editData,
+      steps: editData.steps.filter((_, i) => i !== index),
+    });
+  }
+
+  function addStep() {
+    if (!editData) return;
+    setEditData({ ...editData, steps: [...editData.steps, ""] });
+  }
+
+  function toggleMealType(mt: string) {
+    if (!editData) return;
+    setEditData({
+      ...editData,
+      mealTypes: editData.mealTypes.includes(mt)
+        ? editData.mealTypes.filter((m) => m !== mt)
+        : [...editData.mealTypes, mt],
+    });
+  }
 
   if (loading) {
     return (
@@ -82,26 +252,359 @@ export function RecipeView({ id }: { id: string }) {
     );
   }
 
+  // ── EDIT MODE ──
+  if (editing && editData) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/recipes"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to recipes
+          </Link>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={cancelEditing}>
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={saveEdits} disabled={saving}>
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+
+        <Card className="border-border/60 overflow-hidden">
+          <div className="bg-gradient-to-r from-accent/40 to-transparent px-5 py-4">
+            <h2 className="font-display text-xl font-bold">Edit Recipe</h2>
+          </div>
+          <CardContent className="pt-5 space-y-5">
+            {/* Title + URLs */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium">Title</label>
+                <Input
+                  value={editData.title}
+                  onChange={(e) =>
+                    setEditData({ ...editData, title: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Image URL</label>
+                <Input
+                  value={editData.imageUrl ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      imageUrl: e.target.value || undefined,
+                    })
+                  }
+                  placeholder="https://..."
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Source URL</label>
+                <Input
+                  value={editData.sourceUrl ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      sourceUrl: e.target.value || undefined,
+                    })
+                  }
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            {/* Times + servings */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-sm font-medium">Prep (min)</label>
+                <Input
+                  type="number"
+                  value={editData.prepMinutes}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      prepMinutes: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Cook (min)</label>
+                <Input
+                  type="number"
+                  value={editData.cookMinutes}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      cookMinutes: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Servings</label>
+                <Input
+                  type="number"
+                  value={editData.servings}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      servings: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Macros */}
+            <div className="grid grid-cols-4 gap-3">
+              <div>
+                <label className="text-sm font-medium">Calories</label>
+                <Input
+                  type="number"
+                  value={editData.calories ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      calories: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Protein (g)</label>
+                <Input
+                  type="number"
+                  value={editData.proteinG ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      proteinG: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Carbs (g)</label>
+                <Input
+                  type="number"
+                  value={editData.carbsG ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      carbsG: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fat (g)</label>
+                <Input
+                  type="number"
+                  value={editData.fatG ?? ""}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      fatG: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Role */}
+            <div>
+              <label className="text-sm font-medium">Recipe Role</label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {RECIPE_ROLES.map((r) => (
+                  <button
+                    key={r.value}
+                    onClick={() =>
+                      setEditData({ ...editData, role: r.value })
+                    }
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all",
+                      editData.role === r.value
+                        ? ROLE_COLORS[r.value]
+                        : "border-border/60 text-muted-foreground"
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Meal Types */}
+            <div>
+              <label className="text-sm font-medium">Meal Type</label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {MEAL_TYPES.map((mt) => (
+                  <button
+                    key={mt}
+                    onClick={() => toggleMealType(mt)}
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-sm font-medium capitalize transition-all",
+                      editData.mealTypes.includes(mt)
+                        ? MEAL_TYPE_COLORS[mt]
+                        : "border-border/60 text-muted-foreground"
+                    )}
+                  >
+                    {mt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ingredients */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">
+                  Ingredients ({editData.ingredients.length})
+                </label>
+                <Button variant="outline" size="sm" onClick={addIngredient}>
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {editData.ingredients.map((ing, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      className="w-16"
+                      placeholder="Qty"
+                      value={ing.qty ?? ""}
+                      onChange={(e) =>
+                        updateIngredient(
+                          i,
+                          "qty",
+                          e.target.value ? Number(e.target.value) : null
+                        )
+                      }
+                    />
+                    <Input
+                      className="w-20"
+                      placeholder="Unit"
+                      value={ing.unit}
+                      onChange={(e) =>
+                        updateIngredient(i, "unit", e.target.value)
+                      }
+                    />
+                    <Input
+                      className="flex-1"
+                      placeholder="Ingredient name"
+                      value={ing.name}
+                      onChange={(e) =>
+                        updateIngredient(i, "name", e.target.value)
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeIngredient(i)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Steps */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">
+                  Steps ({editData.steps.length})
+                </label>
+                <Button variant="outline" size="sm" onClick={addStep}>
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {editData.steps.map((step, i) => (
+                  <div key={i} className="flex gap-2 items-start">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold mt-1">
+                      {i + 1}
+                    </span>
+                    <textarea
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                      rows={2}
+                      value={step}
+                      onChange={(e) => updateStep(i, e.target.value)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive mt-1"
+                      onClick={() => removeStep(i)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Delete */}
+        <div className="flex justify-end">
+          <Button
+            variant="destructive"
+            onClick={deleteRecipe}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete Recipe
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── VIEW MODE ──
   const rawIngredients: RecipeIngredient[] = JSON.parse(recipe.ingredients);
   const steps: string[] = JSON.parse(recipe.steps);
   const tags: string[] = JSON.parse(recipe.tags);
+  const mealTypes: string[] = JSON.parse(recipe.mealTypes ?? '["dinner"]');
 
   const currentServings = adjustedServings ?? recipe.servings;
   const servingRatio = currentServings / recipe.servings;
 
-  // Scale ingredients by serving ratio
   const ingredients = rawIngredients.map((ing) => ({
     ...ing,
-    qty: ing.qty != null ? Math.round(ing.qty * servingRatio * 100) / 100 : null,
+    qty:
+      ing.qty != null
+        ? Math.round(ing.qty * servingRatio * 100) / 100
+        : null,
   }));
 
   function formatQty(qty: number): string {
     if (qty === Math.floor(qty)) return String(qty);
-    // Common fractions
     const frac = qty - Math.floor(qty);
     const whole = Math.floor(qty);
     const fractions: [number, string][] = [
-      [0.25, "¼"], [0.33, "⅓"], [0.5, "½"], [0.67, "⅔"], [0.75, "¾"],
+      [0.25, "\u00BC"],
+      [0.33, "\u2153"],
+      [0.5, "\u00BD"],
+      [0.67, "\u2154"],
+      [0.75, "\u00BE"],
     ];
     for (const [val, sym] of fractions) {
       if (Math.abs(frac - val) < 0.05) {
@@ -157,7 +660,6 @@ export function RecipeView({ id }: { id: string }) {
     color: string;
   }[];
 
-  // Group ingredients by section
   const sections = new Map<string, { ing: RecipeIngredient; idx: number }[]>();
   ingredients.forEach((ing, idx) => {
     const section = ing.section ?? "Ingredients";
@@ -167,14 +669,20 @@ export function RecipeView({ id }: { id: string }) {
 
   return (
     <div className="space-y-8">
-      {/* Back button */}
-      <Link
-        href="/recipes"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to recipes
-      </Link>
+      {/* Top bar */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/recipes"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to recipes
+        </Link>
+        <Button variant="outline" onClick={startEditing}>
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit
+        </Button>
+      </div>
 
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl">
@@ -220,7 +728,9 @@ export function RecipeView({ id }: { id: string }) {
           <Users className="h-4 w-4 text-muted-foreground" />
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setAdjustedServings(Math.max(1, currentServings - 1))}
+              onClick={() =>
+                setAdjustedServings(Math.max(1, currentServings - 1))
+              }
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
             >
               <Minus className="h-3 w-3" />
@@ -259,30 +769,41 @@ export function RecipeView({ id }: { id: string }) {
       </div>
 
       {/* Tags */}
-      {(tags.length > 0 || recipe.isQuick || recipe.isSlowCook || recipe.leftoverFriendly) && (
-        <div className="flex flex-wrap gap-2">
-          {recipe.isQuick && (
-            <Badge className="bg-sage/15 text-sage border-sage/25 font-medium">
-              Quick
-            </Badge>
-          )}
-          {recipe.isSlowCook && (
-            <Badge className="bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25 font-medium">
-              Slow Cooker
-            </Badge>
-          )}
-          {recipe.leftoverFriendly && (
-            <Badge className="bg-amber-warm/15 text-amber-deep border-amber-warm/25 font-medium">
-              Leftover Friendly
-            </Badge>
-          )}
-          {tags.map((tag) => (
-            <Badge key={tag} variant="outline" className="font-normal">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Badge
+          className={`font-medium capitalize ${ROLE_COLORS[recipe.role] ?? ROLE_COLORS.complete}`}
+        >
+          {recipe.role}
+        </Badge>
+        {mealTypes.map((mt) => (
+          <Badge
+            key={mt}
+            className={`font-medium capitalize ${MEAL_TYPE_COLORS[mt] ?? ""}`}
+          >
+            {mt}
+          </Badge>
+        ))}
+        {recipe.isQuick && (
+          <Badge className="bg-sage/15 text-sage border-sage/25 font-medium">
+            Quick
+          </Badge>
+        )}
+        {recipe.isSlowCook && (
+          <Badge className="bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25 font-medium">
+            Slow Cooker
+          </Badge>
+        )}
+        {recipe.leftoverFriendly && (
+          <Badge className="bg-amber-warm/15 text-amber-deep border-amber-warm/25 font-medium">
+            Leftover Friendly
+          </Badge>
+        )}
+        {tags.map((tag) => (
+          <Badge key={tag} variant="outline" className="font-normal">
+            {tag}
+          </Badge>
+        ))}
+      </div>
 
       {/* Macros */}
       {macros.length > 0 && (
@@ -314,7 +835,6 @@ export function RecipeView({ id }: { id: string }) {
 
       {/* Main content: ingredients + steps */}
       <div className="grid gap-8 lg:grid-cols-[340px_1fr]">
-        {/* Ingredients */}
         <div>
           <Card className="border-border/60 overflow-hidden lg:sticky lg:top-8">
             <div className="bg-gradient-to-r from-accent/40 to-transparent px-5 py-4">
@@ -404,7 +924,6 @@ export function RecipeView({ id }: { id: string }) {
           </Card>
         </div>
 
-        {/* Steps */}
         <div>
           <h2 className="font-display text-lg font-bold mb-5">Instructions</h2>
           <div className="space-y-6">
