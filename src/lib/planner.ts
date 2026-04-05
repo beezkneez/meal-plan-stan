@@ -1,5 +1,10 @@
 import { differenceInDays } from "date-fns";
-import type { ShiftType, ScheduleDay, BusynessLevel, CalendarEvent } from "@/types";
+import type {
+  ShiftType,
+  ScheduleDay,
+  BusynessLevel,
+  CalendarEvent,
+} from "@/types";
 
 interface PlannerRecipe {
   id: string;
@@ -11,10 +16,11 @@ interface PlannerRecipe {
   isSlowCook: boolean;
   leftoverFriendly: boolean;
   tags: string[];
+  mealTypes: string[];
 }
 
 interface PlannedSlot {
-  date: string; // ISO date string
+  date: string;
   mealType: "breakfast" | "lunch" | "dinner";
   recipeId: string | null;
   recipeTitle: string;
@@ -34,6 +40,8 @@ interface PlannerInput {
   householdSize: number;
   leftoverWorkMeals: boolean;
   targetProteinPerDay: number;
+  lunchDays: number[]; // 0=Sun, 1=Mon, etc.
+  includeBreakfast: boolean;
 }
 
 export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
@@ -46,27 +54,40 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
     householdSize,
     leftoverWorkMeals,
     targetProteinPerDay,
+    lunchDays,
+    includeBreakfast,
   } = input;
 
   const slots: PlannedSlot[] = [];
-  const recentlyUsed = new Map<string, number>(); // recipeId -> days since used
-  const dinnerRecipes = recipes.filter(
-    (r) => !r.tags.includes("breakfast")
-  );
-  const breakfastRecipes = recipes.filter((r) => r.tags.includes("breakfast"));
+  const recentlyUsed = new Map<string, number>();
 
-  // Simple breakfast rotation if no breakfast recipes tagged
+  // Split recipes by meal type
+  const dinnerRecipes = recipes.filter((r) => r.mealTypes.includes("dinner"));
+  const lunchRecipes = recipes.filter((r) => r.mealTypes.includes("lunch"));
+  const breakfastRecipes = recipes.filter((r) =>
+    r.mealTypes.includes("breakfast")
+  );
+
+  // Fallback: if user only has "dinner" tagged recipes, use them for lunch too
+  const lunchCandidates =
+    lunchRecipes.length > 0
+      ? lunchRecipes
+      : dinnerRecipes.filter((r) => r.isQuick);
+
   const defaultBreakfasts = [
     "Eggs & Toast",
-    "Oatmeal & Berries",
+    "Oatmeal & Fruit",
     "Protein Smoothie",
     "Greek Yogurt Bowl",
+    "Pancakes",
+    "Breakfast Wrap",
   ];
 
   for (let d = 0; d < days; d++) {
     const date = new Date(startDate);
     date.setDate(date.getDate() + d);
     const dateStr = date.toISOString().split("T")[0];
+    const dayOfWeek = date.getDay(); // 0=Sun
 
     const shift = getShiftForDate(date, anchorDate, schedule);
     const busyness = classifyBusyness(shift, input.calendarEvents, date);
@@ -77,34 +98,35 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
       d < days - 1
         ? getShiftForDate(nextDate, anchorDate, schedule)
         : "OFF";
-    const tomorrowIsWork =
-      nextShift === "DAY" || nextShift === "NIGHT";
+    const tomorrowIsWork = nextShift === "DAY" || nextShift === "NIGHT";
 
     // === BREAKFAST ===
-    if (breakfastRecipes.length > 0) {
-      const br = breakfastRecipes[d % breakfastRecipes.length];
-      slots.push({
-        date: dateStr,
-        mealType: "breakfast",
-        recipeId: br.id,
-        recipeTitle: br.title,
-        servings: householdSize,
-        isLeftover: false,
-      });
-    } else {
-      slots.push({
-        date: dateStr,
-        mealType: "breakfast",
-        recipeId: null,
-        recipeTitle: defaultBreakfasts[d % defaultBreakfasts.length],
-        servings: householdSize,
-        isLeftover: false,
-        notes: "Quick staple breakfast",
-      });
+    if (includeBreakfast) {
+      if (breakfastRecipes.length > 0) {
+        const br = pickRecipe(breakfastRecipes, "free", recentlyUsed, d, 0);
+        slots.push({
+          date: dateStr,
+          mealType: "breakfast",
+          recipeId: br?.id ?? null,
+          recipeTitle: br?.title ?? defaultBreakfasts[d % defaultBreakfasts.length],
+          servings: householdSize,
+          isLeftover: false,
+        });
+      } else {
+        slots.push({
+          date: dateStr,
+          mealType: "breakfast",
+          recipeId: null,
+          recipeTitle: defaultBreakfasts[d % defaultBreakfasts.length],
+          servings: householdSize,
+          isLeftover: false,
+          notes: "Quick staple breakfast",
+        });
+      }
     }
 
     // === DINNER ===
-    const dinnerRecipe = pickDinnerRecipe(
+    const dinnerRecipe = pickRecipe(
       dinnerRecipes,
       busyness,
       recentlyUsed,
@@ -112,10 +134,15 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
       targetProteinPerDay
     );
 
-    const dinnerServings =
-      leftoverWorkMeals && tomorrowIsWork && dinnerRecipe?.leftoverFriendly
-        ? householdSize + 1
-        : householdSize;
+    // Make extra servings for leftovers if tomorrow is a work day
+    const makingLeftovers =
+      leftoverWorkMeals &&
+      tomorrowIsWork &&
+      dinnerRecipe?.leftoverFriendly;
+
+    const dinnerServings = makingLeftovers
+      ? householdSize + 2 // extra for packed lunch
+      : householdSize;
 
     if (dinnerRecipe) {
       recentlyUsed.set(dinnerRecipe.id, d);
@@ -128,50 +155,73 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
       recipeTitle: dinnerRecipe?.title ?? "Plan a meal",
       servings: dinnerServings,
       isLeftover: false,
+      notes:
+        busyness === "busy"
+          ? "Work day — quick or prepped meal"
+          : busyness === "moderate"
+            ? "Busy day — keep it simple"
+            : makingLeftovers
+              ? "Making extra for leftovers"
+              : undefined,
     });
 
     // === LUNCH ===
     const isWorkDay = shift === "DAY" || shift === "NIGHT";
+    const wantsLunch = lunchDays.includes(dayOfWeek) || isWorkDay;
 
-    // Check if yesterday's dinner had leftovers for us
-    const yesterdayDinnerSlot = slots.find(
-      (s) => {
-        const yesterday = new Date(date);
-        yesterday.setDate(yesterday.getDate() - 1);
-        return (
-          s.date === yesterday.toISOString().split("T")[0] &&
-          s.mealType === "dinner" &&
-          !s.isLeftover
-        );
-      }
-    );
+    if (!wantsLunch) continue;
 
-    const hasLeftovers =
-      isWorkDay &&
-      leftoverWorkMeals &&
-      yesterdayDinnerSlot &&
-      yesterdayDinnerSlot.servings > householdSize;
+    // Check yesterday's dinner for leftover opportunity
+    const yesterdayDinner = slots.find((s) => {
+      const yesterday = new Date(date);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return (
+        s.date === yesterday.toISOString().split("T")[0] &&
+        s.mealType === "dinner" &&
+        !s.isLeftover &&
+        s.servings > householdSize
+      );
+    });
 
-    if (hasLeftovers) {
+    if (yesterdayDinner && isWorkDay) {
+      // Use leftovers for work lunch
       slots.push({
         date: dateStr,
         mealType: "lunch",
-        recipeId: yesterdayDinnerSlot.recipeId,
-        recipeTitle: `Leftover: ${yesterdayDinnerSlot.recipeTitle}`,
+        recipeId: yesterdayDinner.recipeId,
+        recipeTitle: `Leftover: ${yesterdayDinner.recipeTitle}`,
         servings: 1,
         isLeftover: true,
-        leftoverSourceDate: yesterdayDinnerSlot.date,
+        leftoverSourceDate: yesterdayDinner.date,
+        notes: "Packed for work",
       });
-    } else {
-      // Pick a quick lunch recipe or mark as "light meal"
-      const quickLunch = dinnerRecipes.find(
-        (r) => r.isQuick && !recentlyUsed.has(r.id)
+    } else if (lunchCandidates.length > 0) {
+      // Pick a lunch recipe
+      const lunchRecipe = pickRecipe(
+        lunchCandidates,
+        busyness,
+        recentlyUsed,
+        d,
+        targetProteinPerDay
       );
+      if (lunchRecipe) {
+        recentlyUsed.set(lunchRecipe.id, d);
+      }
       slots.push({
         date: dateStr,
         mealType: "lunch",
-        recipeId: quickLunch?.id ?? null,
-        recipeTitle: quickLunch?.title ?? "Light lunch / salad",
+        recipeId: lunchRecipe?.id ?? null,
+        recipeTitle: lunchRecipe?.title ?? "Light lunch",
+        servings: isWorkDay ? 1 : householdSize,
+        isLeftover: false,
+        notes: isWorkDay ? "Pack for work" : undefined,
+      });
+    } else {
+      slots.push({
+        date: dateStr,
+        mealType: "lunch",
+        recipeId: null,
+        recipeTitle: "Light lunch / salad",
         servings: isWorkDay ? 1 : householdSize,
         isLeftover: false,
         notes: isWorkDay ? "Pack for work" : undefined,
@@ -182,7 +232,7 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
   return slots;
 }
 
-function pickDinnerRecipe(
+function pickRecipe(
   recipes: PlannerRecipe[],
   busyness: BusynessLevel,
   recentlyUsed: Map<string, number>,
@@ -191,13 +241,15 @@ function pickDinnerRecipe(
 ): PlannerRecipe | null {
   if (recipes.length === 0) return null;
 
-  // Filter by time budget
+  // Filter by time budget for busy days
   let candidates = recipes;
   if (busyness === "busy") {
     const quickOrSlow = recipes.filter((r) => r.isQuick || r.isSlowCook);
     if (quickOrSlow.length > 0) candidates = quickOrSlow;
   } else if (busyness === "moderate") {
-    const under45 = recipes.filter((r) => r.totalMinutes <= 45 || r.isSlowCook);
+    const under45 = recipes.filter(
+      (r) => r.totalMinutes <= 45 || r.isSlowCook
+    );
     if (under45.length > 0) candidates = under45;
   }
 
@@ -205,20 +257,24 @@ function pickDinnerRecipe(
   const scored = candidates.map((recipe) => {
     const daysSinceUsed = recentlyUsed.has(recipe.id)
       ? currentDay - recentlyUsed.get(recipe.id)!
-      : 16;
+      : 16; // never used = max variety
 
-    const varietyScore = Math.min(daysSinceUsed / 16, 1);
+    // Heavily penalize recently used recipes
+    const varietyScore = daysSinceUsed <= 1 ? 0 : Math.min(daysSinceUsed / 8, 1);
+
     const proteinScore =
-      recipe.proteinG != null
+      recipe.proteinG != null && targetProtein > 0
         ? Math.min(recipe.proteinG / (targetProtein / 3), 1)
         : 0.5;
-    const leftoverScore = recipe.leftoverFriendly ? 1 : 0.5;
+
+    const leftoverScore = recipe.leftoverFriendly ? 1 : 0.7;
+
     const quickScore =
       busyness === "busy" && (recipe.isQuick || recipe.isSlowCook) ? 1 : 0.7;
 
     const score =
-      proteinScore * 0.4 +
-      varietyScore * 0.25 +
+      varietyScore * 0.4 +
+      proteinScore * 0.25 +
       leftoverScore * 0.2 +
       quickScore * 0.15;
 
@@ -227,8 +283,9 @@ function pickDinnerRecipe(
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Weighted random from top 3
-  const top = scored.slice(0, Math.min(3, scored.length));
+  // Weighted random from top candidates (more variety)
+  const topCount = Math.min(4, scored.length);
+  const top = scored.slice(0, topCount);
   const totalWeight = top.reduce((sum, s) => sum + s.score, 0);
   let random = Math.random() * totalWeight;
   for (const entry of top) {
@@ -259,5 +316,5 @@ function classifyBusyness(
 
   if (shift === "OFF" && dayEvents.length === 0) return "free";
   if (shift === "OFF" && dayEvents.length > 0) return "moderate";
-  return "busy"; // DAY or NIGHT shift
+  return "busy";
 }

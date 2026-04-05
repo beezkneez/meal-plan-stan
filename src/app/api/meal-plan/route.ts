@@ -10,16 +10,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(req.url);
-  const startParam = url.searchParams.get("start");
-  const endParam = url.searchParams.get("end");
-
-  const where: Record<string, unknown> = { userId: session.user.id };
-  if (startParam && endParam) {
-    where.startDate = { gte: new Date(startParam) };
-    where.endDate = { lte: new Date(endParam) };
-  }
-
   const plans = await prisma.mealPlan.findMany({
     where: { userId: session.user.id },
     include: { slots: { include: { recipe: true } } },
@@ -37,7 +27,14 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { startDate, days = 16, householdSize = 4, leftoverWorkMeals = true } = body;
+  const {
+    startDate,
+    days = 16,
+    householdSize = 4,
+    leftoverWorkMeals = true,
+    lunchDays = [0, 6],
+    includeBreakfast = true,
+  } = body;
 
   // Get user's schedule
   const schedule = await prisma.schedule.findUnique({
@@ -51,7 +48,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Get user's recipes
+  // Get user's recipes with mealTypes
   const dbRecipes = await prisma.recipe.findMany({
     where: { userId: session.user.id },
   });
@@ -66,7 +63,13 @@ export async function POST(req: Request) {
     isSlowCook: r.isSlowCook,
     leftoverFriendly: r.leftoverFriendly,
     tags: JSON.parse(r.tags) as string[],
+    mealTypes: JSON.parse(r.mealTypes) as string[],
   }));
+
+  // Get user preferences for protein target
+  const prefs = await prisma.userPreferences.findUnique({
+    where: { userId: session.user.id },
+  });
 
   const pattern: ScheduleDay[] = JSON.parse(schedule.pattern);
 
@@ -76,13 +79,19 @@ export async function POST(req: Request) {
     schedule: pattern,
     anchorDate: schedule.anchorDate,
     recipes,
-    calendarEvents: [], // TODO: integrate Google Calendar
-    householdSize,
+    calendarEvents: [],
+    householdSize: prefs?.householdSize ?? householdSize,
     leftoverWorkMeals,
-    targetProteinPerDay: 180,
+    targetProteinPerDay: 150,
+    lunchDays,
+    includeBreakfast,
   });
 
-  // Save to database
+  // Delete old plans before creating new one
+  await prisma.mealPlan.deleteMany({
+    where: { userId: session.user.id },
+  });
+
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + days - 1);
 
