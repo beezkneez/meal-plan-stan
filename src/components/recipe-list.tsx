@@ -20,7 +20,9 @@ import {
   ExternalLink,
   Trash2,
   ChefHat,
+  Eye,
 } from "lucide-react";
+import Link from "next/link";
 import type { ScrapedRecipe } from "@/types";
 
 interface Recipe {
@@ -117,29 +119,44 @@ export function RecipeList() {
                 key={recipe.id}
                 className="card-warm group overflow-hidden border-border/60"
               >
-                {recipe.imageUrl && (
-                  <div className="relative h-44 overflow-hidden">
-                    <img
-                      src={recipe.imageUrl}
-                      alt={recipe.title}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                  </div>
-                )}
+                <Link href={`/recipes/${recipe.id}`}>
+                  {recipe.imageUrl && (
+                    <div className="relative h-44 overflow-hidden">
+                      <img
+                        src={recipe.imageUrl}
+                        alt={recipe.title}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                    </div>
+                  )}
+                </Link>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="font-display text-base leading-snug">
-                      {recipe.title}
-                    </CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
-                      onClick={() => deleteRecipe(recipe.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Link href={`/recipes/${recipe.id}`} className="flex-1 min-w-0">
+                      <CardTitle className="font-display text-base leading-snug hover:text-primary transition-colors">
+                        {recipe.title}
+                      </CardTitle>
+                    </Link>
+                    <div className="flex shrink-0 gap-0.5">
+                      <Link href={`/recipes/${recipe.id}`}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                        onClick={() => deleteRecipe(recipe.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
