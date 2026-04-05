@@ -64,10 +64,17 @@ export function MealPlanGrid() {
     new Date().toISOString().split("T")[0]
   );
   const [ownRecipeRatio, setOwnRecipeRatio] = useState(60);
-  const [lunchDays, setLunchDays] = useState<number[]>([0, 6]); // Sun, Sat by default
+  const [lunchDays, setLunchDays] = useState<number[]>([0, 6]);
   const [includBreakfast, setIncludeBreakfast] = useState(true);
   const [recipeCount, setRecipeCount] = useState<number | null>(null);
   const router = useRouter();
+
+  // Serving settings
+  const [householdSize, setHouseholdSize] = useState(3); // full family
+  const [workDayHeadcount, setWorkDayHeadcount] = useState(2); // who eats when you're working
+  const [leftoverMode, setLeftoverMode] = useState(true); // make extra dinner for next day lunch
+  const [leftoverPortions, setLeftoverPortions] = useState(3); // how many leftover portions
+  const [easyWorkNightMeals, setEasyWorkNightMeals] = useState(true); // pick easy meals on work nights
 
   useEffect(() => {
     fetch("/api/meal-plan")
@@ -99,8 +106,11 @@ export function MealPlanGrid() {
         body: JSON.stringify({
           startDate,
           days: 16,
-          householdSize: 4,
-          leftoverWorkMeals: true,
+          householdSize,
+          householdSizeWorkDay: workDayHeadcount,
+          leftoverWorkMeals: leftoverMode,
+          leftoverServings: leftoverPortions,
+          easyWorkNightMeals,
           ownRecipeRatio,
           lunchDays,
           includeBreakfast: includBreakfast,
@@ -173,8 +183,7 @@ export function MealPlanGrid() {
                     You only have {recipeCount} recipe{recipeCount !== 1 ? "s" : ""}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    For a good 16-day plan with variety, aim for at least 10-15 recipes.
-                    Head to Discover to find and approve new ones quickly.
+                    For good variety, aim for 10-15+ recipes.
                   </p>
                   <Link href="/discover">
                     <Button variant="outline" size="sm" className="mt-2">
@@ -197,94 +206,172 @@ export function MealPlanGrid() {
               />
             </div>
 
-            {/* Recipe ratio slider */}
-            <div>
-              <label className="text-sm font-medium">Recipe Mix</label>
-              <p className="text-xs text-muted-foreground mb-3">
-                How much of the plan should use your saved recipes vs. new
-                suggestions?
-              </p>
-              <div className="space-y-2">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={10}
-                  value={ownRecipeRatio}
-                  onChange={(e) => setOwnRecipeRatio(Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
-                <div className="flex justify-between text-xs">
-                  <span
-                    className={cn(
-                      "font-medium",
-                      ownRecipeRatio >= 50
-                        ? "text-primary"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {ownRecipeRatio}% Your recipes
-                  </span>
-                  <span
-                    className={cn(
-                      "font-medium",
-                      ownRecipeRatio < 50
-                        ? "text-terracotta"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    {100 - ownRecipeRatio}% New suggestions
-                  </span>
+            {/* ── Household & Servings ── */}
+            <div className="rounded-xl border border-border/60 p-4 space-y-4">
+              <p className="text-sm font-semibold">Household & Servings</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium">Family size (days off)</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={householdSize}
+                    onChange={(e) => setHouseholdSize(Number(e.target.value))}
+                    className="w-20 mt-1"
+                  />
                 </div>
-                <p className="text-[11px] text-muted-foreground/70">
-                  {ownRecipeRatio === 100
-                    ? "Only your saved recipes will be used."
-                    : ownRecipeRatio === 0
-                      ? "All meals will be new suggestions for you to approve."
-                      : "New suggestions will need your approval before being added to your recipe book."}
-                </p>
+                <div>
+                  <label className="text-xs font-medium">Eating at home on work nights</label>
+                  <p className="text-[11px] text-muted-foreground">e.g. partner + kids</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={12}
+                    value={workDayHeadcount}
+                    onChange={(e) => setWorkDayHeadcount(Number(e.target.value))}
+                    className="w-20 mt-1"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Lunch day picker */}
-            <div>
-              <label className="text-sm font-medium">Lunch Days</label>
-              <p className="text-xs text-muted-foreground mb-3">
-                Which days do you want lunch planned? Work night dinners are
-                auto-detected from your schedule. Leftovers can be packed for
-                shifts too.
+            {/* ── Leftovers ── */}
+            <div className="rounded-xl border border-border/60 p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Leftovers</p>
+                <button
+                  onClick={() => setLeftoverMode(!leftoverMode)}
+                  className={cn(
+                    "rounded-lg border-2 px-3 py-1 text-xs font-medium transition-all",
+                    leftoverMode
+                      ? "border-sage bg-sage/10 text-sage"
+                      : "border-border/60 text-muted-foreground"
+                  )}
+                >
+                  {leftoverMode ? "On" : "Off"}
+                </button>
+              </div>
+
+              {leftoverMode && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Dinner will make extra portions so you have leftovers for
+                    lunch the next day. No separate lunch recipe needed.
+                  </p>
+                  <div>
+                    <label className="text-xs font-medium">
+                      Extra leftover portions
+                    </label>
+                    <p className="text-[11px] text-muted-foreground">
+                      How many packed lunches for the next day?
+                    </p>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={8}
+                      value={leftoverPortions}
+                      onChange={(e) => setLeftoverPortions(Number(e.target.value))}
+                      className="w-20 mt-1"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Work night dinner = {workDayHeadcount} eating + {leftoverPortions} leftover ={" "}
+                      <span className="font-semibold text-foreground">{workDayHeadcount + leftoverPortions} servings</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Off day dinner = {householdSize} eating + {leftoverPortions} leftover ={" "}
+                      <span className="font-semibold text-foreground">{householdSize + leftoverPortions} servings</span>
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* ── Work Night Meals ── */}
+            <div className="rounded-xl border border-border/60 p-4 space-y-3">
+              <p className="text-sm font-semibold">Work Night Meals</p>
+              <p className="text-xs text-muted-foreground">
+                When you&apos;re on shift, pick easy meals your partner can make
+                quickly for the kids.
               </p>
-              <div className="flex gap-2">
-                {DAYS_OF_WEEK.map((day, i) => (
-                  <button
-                    key={day}
-                    onClick={() => toggleLunchDay(i)}
-                    className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-xl border-2 text-xs font-semibold transition-all duration-200",
-                      lunchDays.includes(i)
-                        ? "border-sage bg-sage/10 text-sage"
-                        : "border-border/60 text-muted-foreground hover:border-sage/30"
-                    )}
-                  >
-                    {day}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Breakfast toggle */}
-            <div>
               <button
-                onClick={() => setIncludeBreakfast(!includBreakfast)}
+                onClick={() => setEasyWorkNightMeals(!easyWorkNightMeals)}
                 className={cn(
                   "rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-all duration-200",
-                  includBreakfast
-                    ? "border-amber-warm bg-amber-warm/10 text-amber-deep"
-                    : "border-border/60 text-muted-foreground hover:border-amber-warm/30"
+                  easyWorkNightMeals
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border/60 text-muted-foreground"
                 )}
               >
-                Include breakfast
+                Prefer easy/quick meals on work nights
               </button>
+            </div>
+
+            {/* ── Meals to include ── */}
+            <div className="rounded-xl border border-border/60 p-4 space-y-4">
+              <p className="text-sm font-semibold">Meals to Plan</p>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => setIncludeBreakfast(!includBreakfast)}
+                  className={cn(
+                    "rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-all duration-200",
+                    includBreakfast
+                      ? "border-amber-warm bg-amber-warm/10 text-amber-deep"
+                      : "border-border/60 text-muted-foreground"
+                  )}
+                >
+                  Breakfast
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium">Plan lunch on these days</label>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  {leftoverMode
+                    ? "Work day lunches are covered by leftovers. Pick extra days you want a fresh lunch."
+                    : "Which days do you want lunch planned?"}
+                </p>
+                <div className="flex gap-2">
+                  {DAYS_OF_WEEK.map((day, i) => (
+                    <button
+                      key={day}
+                      onClick={() => toggleLunchDay(i)}
+                      className={cn(
+                        "flex h-10 w-10 items-center justify-center rounded-xl border-2 text-xs font-semibold transition-all duration-200",
+                        lunchDays.includes(i)
+                          ? "border-sage bg-sage/10 text-sage"
+                          : "border-border/60 text-muted-foreground hover:border-sage/30"
+                      )}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Recipe ratio slider */}
+            <div className="rounded-xl border border-border/60 p-4 space-y-3">
+              <p className="text-sm font-semibold">Recipe Mix</p>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={10}
+                value={ownRecipeRatio}
+                onChange={(e) => setOwnRecipeRatio(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <div className="flex justify-between text-xs">
+                <span className={cn("font-medium", ownRecipeRatio >= 50 ? "text-primary" : "text-muted-foreground")}>
+                  {ownRecipeRatio}% Your recipes
+                </span>
+                <span className={cn("font-medium", ownRecipeRatio < 50 ? "text-terracotta" : "text-muted-foreground")}>
+                  {100 - ownRecipeRatio}% New suggestions
+                </span>
+              </div>
             </div>
 
             {/* Generate button */}

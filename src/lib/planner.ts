@@ -42,6 +42,7 @@ interface PlannerInput {
   householdSizeWorkDay: number;
   leftoverServings: number;
   leftoverWorkMeals: boolean;
+  easyWorkNightMeals: boolean;
   targetProteinPerDay: number;
   lunchDays: number[];
   includeBreakfast: boolean;
@@ -58,6 +59,7 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
     householdSizeWorkDay,
     leftoverServings,
     leftoverWorkMeals,
+    easyWorkNightMeals,
     targetProteinPerDay,
     lunchDays,
     includeBreakfast,
@@ -145,12 +147,15 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
     const isWorkTonight = shift === "NIGHT" || shift === "DAY";
     const tonightHeadcount = isWorkTonight ? householdSizeWorkDay : householdSize;
 
+    // On work nights, override busyness to pick easy meals
+    const dinnerBusyness = isWorkTonight && easyWorkNightMeals ? "busy" as BusynessLevel : busyness;
+
     // Decide: use a complete meal or compose main + sides
     const useComposed = canCompose && (completeDinners.length === 0 || Math.random() > 0.4);
 
     if (useComposed && canCompose) {
       // Pick a main protein
-      const mainRecipe = pickRecipe(mainDinners, busyness, recentlyUsed, d, targetProteinPerDay);
+      const mainRecipe = pickRecipe(mainDinners, dinnerBusyness, recentlyUsed, d, targetProteinPerDay);
 
       const makingLeftovers = leftoverWorkMeals && mainRecipe?.leftoverFriendly;
       const mainServings = tonightHeadcount + (makingLeftovers ? leftoverServings : 0);
@@ -164,12 +169,16 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
         recipeTitle: mainRecipe?.title ?? "Pick a protein",
         servings: mainServings,
         isLeftover: false,
-        notes: makingLeftovers ? "Making extra for leftovers" : undefined,
+        notes: isWorkTonight
+          ? `Easy meal for ${householdSizeWorkDay}${makingLeftovers ? ` + ${leftoverServings} leftovers` : ""}`
+          : makingLeftovers
+            ? `${tonightHeadcount} eating + ${leftoverServings} leftovers`
+            : undefined,
       });
 
       // Pick a side (starch)
       if (sideRecipes.length > 0) {
-        const sideRecipe = pickRecipe(sideRecipes, busyness, recentlyUsed, d, 0);
+        const sideRecipe = pickRecipe(sideRecipes, dinnerBusyness, recentlyUsed, d, 0);
         if (sideRecipe) recentlyUsed.set(sideRecipe.id, d);
         slots.push({
           date: dateStr,
@@ -184,7 +193,7 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
       // Pick a veggie or salad
       const veggieOptions = [...veggieRecipes, ...saladRecipes];
       if (veggieOptions.length > 0) {
-        const vegRecipe = pickRecipe(veggieOptions, busyness, recentlyUsed, d, 0);
+        const vegRecipe = pickRecipe(veggieOptions, dinnerBusyness, recentlyUsed, d, 0);
         if (vegRecipe) recentlyUsed.set(vegRecipe.id, d);
         slots.push({
           date: dateStr,
@@ -198,7 +207,7 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
     } else {
       // Use a complete/standalone recipe
       const allDinnerOptions = completeDinners.length > 0 ? completeDinners : dinnerRecipes;
-      const dinnerRecipe = pickRecipe(allDinnerOptions, busyness, recentlyUsed, d, targetProteinPerDay);
+      const dinnerRecipe = pickRecipe(allDinnerOptions, dinnerBusyness, recentlyUsed, d, targetProteinPerDay);
 
       const makingLeftovers = leftoverWorkMeals && dinnerRecipe?.leftoverFriendly;
       const dinnerServings = tonightHeadcount + (makingLeftovers ? leftoverServings : 0);
@@ -212,22 +221,16 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
         recipeTitle: dinnerRecipe?.title ?? "Plan a meal",
         servings: dinnerServings,
         isLeftover: false,
-        notes:
-          busyness === "busy"
-            ? "Work day — quick or prepped meal"
-            : busyness === "moderate"
-              ? "Busy day — keep it simple"
-              : makingLeftovers
-                ? "Making extra for leftovers"
-                : undefined,
+        notes: isWorkTonight
+          ? `Easy meal for ${householdSizeWorkDay}${makingLeftovers ? ` + ${leftoverServings} leftovers` : ""}`
+          : makingLeftovers
+            ? `${tonightHeadcount} eating + ${leftoverServings} leftovers`
+            : undefined,
       });
     }
 
     // === LUNCH ===
     const isWorkDay = shift === "DAY" || shift === "NIGHT";
-    const wantsLunch = lunchDays.includes(dayOfWeek) || isWorkDay;
-
-    if (!wantsLunch) continue;
 
     // Check yesterday's dinner for leftover opportunity
     const yesterdayDinner = slots.find((s) => {
@@ -236,13 +239,15 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
       return (
         s.date === yesterday.toISOString().split("T")[0] &&
         s.mealType === "dinner" &&
-        !s.isLeftover &&
-        s.servings > householdSize
+        !s.isLeftover
       );
     });
 
-    if (yesterdayDinner && isWorkDay) {
-      // Use leftovers for work lunch
+    const hasLeftovers = leftoverWorkMeals && yesterdayDinner &&
+      yesterdayDinner.servings > (isWorkDay ? householdSizeWorkDay : householdSize);
+
+    if (hasLeftovers) {
+      // Leftovers from last night's dinner — no new recipe needed
       slots.push({
         date: dateStr,
         mealType: "lunch",
@@ -251,40 +256,39 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
         servings: leftoverServings,
         isLeftover: true,
         leftoverSourceDate: yesterdayDinner.date,
-        notes: "Packed for work",
+        notes: isWorkDay ? "Packed for work" : "Leftovers",
       });
-    } else if (lunchCandidates.length > 0) {
-      // Pick a lunch recipe
-      const lunchRecipe = pickRecipe(
-        lunchCandidates,
-        busyness,
-        recentlyUsed,
-        d,
-        targetProteinPerDay
-      );
-      if (lunchRecipe) {
-        recentlyUsed.set(lunchRecipe.id, d);
+    } else if (lunchDays.includes(dayOfWeek)) {
+      // User specifically wants lunch planned on this day
+      if (lunchCandidates.length > 0) {
+        const lunchRecipe = pickRecipe(
+          lunchCandidates,
+          busyness,
+          recentlyUsed,
+          d,
+          targetProteinPerDay
+        );
+        if (lunchRecipe) recentlyUsed.set(lunchRecipe.id, d);
+        slots.push({
+          date: dateStr,
+          mealType: "lunch",
+          recipeId: lunchRecipe?.id ?? null,
+          recipeTitle: lunchRecipe?.title ?? "Light lunch",
+          servings: householdSize,
+          isLeftover: false,
+        });
+      } else {
+        slots.push({
+          date: dateStr,
+          mealType: "lunch",
+          recipeId: null,
+          recipeTitle: "Light lunch / salad",
+          servings: householdSize,
+          isLeftover: false,
+        });
       }
-      slots.push({
-        date: dateStr,
-        mealType: "lunch",
-        recipeId: lunchRecipe?.id ?? null,
-        recipeTitle: lunchRecipe?.title ?? "Light lunch",
-        servings: isWorkDay ? 1 : householdSize,
-        isLeftover: false,
-        notes: isWorkDay ? "Pack for work" : undefined,
-      });
-    } else {
-      slots.push({
-        date: dateStr,
-        mealType: "lunch",
-        recipeId: null,
-        recipeTitle: "Light lunch / salad",
-        servings: isWorkDay ? 1 : householdSize,
-        isLeftover: false,
-        notes: isWorkDay ? "Pack for work" : undefined,
-      });
     }
+    // If not a selected lunch day and no leftovers, skip lunch entirely
   }
 
   return slots;
