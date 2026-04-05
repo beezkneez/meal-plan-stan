@@ -15,6 +15,7 @@ import {
   LogOut,
   Flame,
   Settings,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/recipes", label: "Recipes", icon: ChefHat },
   { href: "/meal-plan", label: "Meal Plan", icon: ClipboardList },
+  { href: "/discover", label: "Discover", icon: Sparkles },
   { href: "/pantry", label: "Pantry", icon: Package },
   { href: "/shopping-list", label: "Shopping List", icon: ShoppingCart },
   { href: "/calendars", label: "Calendars", icon: CalendarDays },
