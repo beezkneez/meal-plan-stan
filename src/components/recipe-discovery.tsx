@@ -16,6 +16,8 @@ import {
   ChefHat,
   Globe,
   Bot,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface DiscoveredRecipe {
@@ -74,6 +76,7 @@ export function RecipeDiscovery() {
   const [approved, setApproved] = useState<Set<number>>(new Set());
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
 
   async function search(q?: string) {
     const searchQuery = q ?? query;
@@ -316,6 +319,73 @@ export function RecipeDiscovery() {
                         </Badge>
                       )}
                     </div>
+
+                    {/* View details toggle */}
+                    <button
+                      onClick={() => setExpanded(expanded === index ? null : index)}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline w-full"
+                    >
+                      {expanded === index ? (
+                        <>
+                          <ChevronUp className="h-3 w-3" />
+                          Hide details
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3" />
+                          View ingredients &amp; steps
+                        </>
+                      )}
+                    </button>
+
+                    {/* Expanded details */}
+                    {expanded === index && (
+                      <div className="space-y-3 border-t border-border/40 pt-3">
+                        {recipe.ingredients.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                              Ingredients
+                            </p>
+                            <div className="max-h-40 overflow-y-auto rounded-lg bg-muted/30 p-2.5 text-xs space-y-0.5">
+                              {recipe.ingredients.map((ing, i) => (
+                                <div key={i}>
+                                  {ing.qty != null && (
+                                    <span className="font-semibold">{ing.qty} </span>
+                                  )}
+                                  {ing.unit && (
+                                    <span className="text-muted-foreground">{ing.unit} </span>
+                                  )}
+                                  {ing.name}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {recipe.steps.length > 0 && (
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                              Steps
+                            </p>
+                            <div className="max-h-40 overflow-y-auto rounded-lg bg-muted/30 p-2.5 text-xs space-y-1.5">
+                              {recipe.steps.map((step, i) => (
+                                <div key={i} className="flex gap-2">
+                                  <span className="font-semibold text-primary shrink-0">{i + 1}.</span>
+                                  <span>{step}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {recipe.calories && (
+                          <div className="flex gap-4 text-xs text-muted-foreground">
+                            {recipe.calories && <span>{recipe.calories} cal</span>}
+                            {recipe.proteinG && <span>{recipe.proteinG}g protein</span>}
+                            {recipe.carbsG && <span>{recipe.carbsG}g carbs</span>}
+                            {recipe.fatG && <span>{recipe.fatG}g fat</span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Action buttons */}
                     <div className="flex gap-2 pt-1">
