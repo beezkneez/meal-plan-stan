@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ── Auth (NextAuth managed) ──
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts    Account[]
+  sessions    Session[]
+  schedule    Schedule?
+  recipes     Recipe[]
+  mealPlans   MealPlan[]
+  pantryItems PantryItem[]
+}
+
+// ── 16-Day Rotation ──
+
+model Schedule {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // JSON array of 16 entries: [{"day":0,"shift":"NIGHT"},{"day":1,"shift":"OFF"},...]
+  pattern    String
+  anchorDate DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Recipes ──
+
+model Recipe {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  sourceUrl   String?
+  imageUrl    String?
+
+  prepMinutes  Int @default(0)
+  cookMinutes  Int @default(0)
+  totalMinutes Int @default(0)
+  servings     Int @default(4)
+
+  // Macros per serving
+  calories Int?
+  proteinG Int?
+  carbsG   Int?
+  fatG     Int?
+
+  // JSON arrays
+  ingredients String @default("[]")
+  steps       String @default("[]")
+  tags        String @default("[]")
+
+  // Planner flags
+  isQuick          Boolean @default(false)
+  isSlowCook       Boolean @default(false)
+  leftoverFriendly Boolean @default(true)
+
+  mealSlots MealSlot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Meal Plans ──
+
+model MealPlan {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startDate DateTime
+  endDate   DateTime
+  slots     MealSlot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MealSlot {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+
+  date     DateTime
+  mealType String   // "breakfast" | "lunch" | "dinner" | "snack"
+
+  recipeId String?
+  recipe   Recipe? @relation(fields: [recipeId], references: [id])
+
+  servings             Int     @default(4)
+  isLeftover           Boolean @default(false)
+  leftoverSourceSlotId String?
+  notes                String?
+}
+
+// ── Pantry ──
+
+model PantryItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name       String
+  category   String // "protein","dairy","grain","spice","oil","produce","frozen"
+  unit       String // "lb","oz","count","bag"
+  qtyOnHand  Float
+  qtyMinimum Float @default(0)
+
+  updatedAt DateTime @updatedAt
+}
