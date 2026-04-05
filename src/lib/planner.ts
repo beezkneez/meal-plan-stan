@@ -17,6 +17,7 @@ interface PlannerRecipe {
   leftoverFriendly: boolean;
   tags: string[];
   mealTypes: string[];
+  role: string; // "complete","main","side","veggie","soup","salad"
 }
 
 interface PlannedSlot {
@@ -67,6 +68,16 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
   const breakfastRecipes = recipes.filter((r) =>
     r.mealTypes.includes("breakfast")
   );
+
+  // Split dinner recipes by role
+  const completeDinners = dinnerRecipes.filter((r) => r.role === "complete" || r.role === "soup");
+  const mainDinners = dinnerRecipes.filter((r) => r.role === "main");
+  const sideRecipes = recipes.filter((r) => r.role === "side");
+  const veggieRecipes = recipes.filter((r) => r.role === "veggie");
+  const saladRecipes = recipes.filter((r) => r.role === "salad");
+
+  // Can we compose meals? Need at least 1 main + 1 side or veggie
+  const canCompose = mainDinners.length > 0 && (sideRecipes.length + veggieRecipes.length) > 0;
 
   // Fallback: if user only has "dinner" tagged recipes, use them for lunch too
   const lunchCandidates =
@@ -126,44 +137,83 @@ export function generateMealPlan(input: PlannerInput): PlannedSlot[] {
     }
 
     // === DINNER ===
-    const dinnerRecipe = pickRecipe(
-      dinnerRecipes,
-      busyness,
-      recentlyUsed,
-      d,
-      targetProteinPerDay
-    );
+    // Decide: use a complete meal or compose main + sides
+    const useComposed = canCompose && (completeDinners.length === 0 || Math.random() > 0.4);
 
-    // Make extra servings for leftovers if tomorrow is a work day
-    const makingLeftovers =
-      leftoverWorkMeals &&
-      tomorrowIsWork &&
-      dinnerRecipe?.leftoverFriendly;
+    if (useComposed && canCompose) {
+      // Pick a main protein
+      const mainRecipe = pickRecipe(mainDinners, busyness, recentlyUsed, d, targetProteinPerDay);
 
-    const dinnerServings = makingLeftovers
-      ? householdSize + 2 // extra for packed lunch
-      : householdSize;
+      const makingLeftovers = leftoverWorkMeals && tomorrowIsWork && mainRecipe?.leftoverFriendly;
+      const mainServings = makingLeftovers ? householdSize + 2 : householdSize;
 
-    if (dinnerRecipe) {
-      recentlyUsed.set(dinnerRecipe.id, d);
+      if (mainRecipe) recentlyUsed.set(mainRecipe.id, d);
+
+      slots.push({
+        date: dateStr,
+        mealType: "dinner",
+        recipeId: mainRecipe?.id ?? null,
+        recipeTitle: mainRecipe?.title ?? "Pick a protein",
+        servings: mainServings,
+        isLeftover: false,
+        notes: makingLeftovers ? "Making extra for leftovers" : undefined,
+      });
+
+      // Pick a side (starch)
+      if (sideRecipes.length > 0) {
+        const sideRecipe = pickRecipe(sideRecipes, busyness, recentlyUsed, d, 0);
+        if (sideRecipe) recentlyUsed.set(sideRecipe.id, d);
+        slots.push({
+          date: dateStr,
+          mealType: "dinner",
+          recipeId: sideRecipe?.id ?? null,
+          recipeTitle: sideRecipe?.title ?? "Pick a side",
+          servings: householdSize,
+          isLeftover: false,
+        });
+      }
+
+      // Pick a veggie or salad
+      const veggieOptions = [...veggieRecipes, ...saladRecipes];
+      if (veggieOptions.length > 0) {
+        const vegRecipe = pickRecipe(veggieOptions, busyness, recentlyUsed, d, 0);
+        if (vegRecipe) recentlyUsed.set(vegRecipe.id, d);
+        slots.push({
+          date: dateStr,
+          mealType: "dinner",
+          recipeId: vegRecipe?.id ?? null,
+          recipeTitle: vegRecipe?.title ?? "Pick a veggie",
+          servings: householdSize,
+          isLeftover: false,
+        });
+      }
+    } else {
+      // Use a complete/standalone recipe
+      const allDinnerOptions = completeDinners.length > 0 ? completeDinners : dinnerRecipes;
+      const dinnerRecipe = pickRecipe(allDinnerOptions, busyness, recentlyUsed, d, targetProteinPerDay);
+
+      const makingLeftovers = leftoverWorkMeals && tomorrowIsWork && dinnerRecipe?.leftoverFriendly;
+      const dinnerServings = makingLeftovers ? householdSize + 2 : householdSize;
+
+      if (dinnerRecipe) recentlyUsed.set(dinnerRecipe.id, d);
+
+      slots.push({
+        date: dateStr,
+        mealType: "dinner",
+        recipeId: dinnerRecipe?.id ?? null,
+        recipeTitle: dinnerRecipe?.title ?? "Plan a meal",
+        servings: dinnerServings,
+        isLeftover: false,
+        notes:
+          busyness === "busy"
+            ? "Work day — quick or prepped meal"
+            : busyness === "moderate"
+              ? "Busy day — keep it simple"
+              : makingLeftovers
+                ? "Making extra for leftovers"
+                : undefined,
+      });
     }
-
-    slots.push({
-      date: dateStr,
-      mealType: "dinner",
-      recipeId: dinnerRecipe?.id ?? null,
-      recipeTitle: dinnerRecipe?.title ?? "Plan a meal",
-      servings: dinnerServings,
-      isLeftover: false,
-      notes:
-        busyness === "busy"
-          ? "Work day — quick or prepped meal"
-          : busyness === "moderate"
-            ? "Busy day — keep it simple"
-            : makingLeftovers
-              ? "Making extra for leftovers"
-              : undefined,
-    });
 
     // === LUNCH ===
     const isWorkDay = shift === "DAY" || shift === "NIGHT";

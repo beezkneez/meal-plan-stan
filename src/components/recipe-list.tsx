@@ -35,6 +35,24 @@ const MEAL_TYPE_COLORS: Record<string, string> = {
   snack: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
 };
 
+const RECIPE_ROLES = [
+  { value: "complete", label: "Complete Meal", desc: "Full meal, no sides needed" },
+  { value: "main", label: "Main", desc: "Protein / main dish — needs sides" },
+  { value: "side", label: "Side", desc: "Starch or grain side dish" },
+  { value: "veggie", label: "Veggie", desc: "Vegetable side dish" },
+  { value: "soup", label: "Soup", desc: "Soup or stew" },
+  { value: "salad", label: "Salad", desc: "Salad or slaw" },
+] as const;
+
+const ROLE_COLORS: Record<string, string> = {
+  complete: "bg-primary/10 text-primary border-primary/20",
+  main: "bg-terracotta/15 text-terracotta border-terracotta/25",
+  side: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  veggie: "bg-sage/15 text-sage border-sage/25",
+  soup: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
+  salad: "bg-sage/15 text-sage border-sage/25",
+};
+
 interface Recipe {
   id: string;
   title: string;
@@ -46,6 +64,7 @@ interface Recipe {
   proteinG?: number;
   tags: string;
   mealTypes: string;
+  role: string;
   isQuick: boolean;
 }
 
@@ -190,6 +209,11 @@ export function RecipeList() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
+                    <Badge
+                      className={`text-xs font-medium capitalize ${ROLE_COLORS[recipe.role] ?? ROLE_COLORS.complete}`}
+                    >
+                      {recipe.role}
+                    </Badge>
                     {mealTypes.map((mt) => (
                       <Badge
                         key={mt}
@@ -241,6 +265,7 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
   const [scraped, setScraped] = useState<ScrapedRecipe | null>(null);
   const [error, setError] = useState("");
   const [selectedMealTypes, setSelectedMealTypes] = useState<string[]>(["dinner"]);
+  const [selectedRole, setSelectedRole] = useState("complete");
 
   async function handleScrape() {
     setError("");
@@ -271,7 +296,7 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
       const res = await fetch("/api/recipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...scraped, mealTypes: selectedMealTypes }),
+        body: JSON.stringify({ ...scraped, mealTypes: selectedMealTypes, role: selectedRole }),
       });
       if (res.ok) onSaved();
     } finally {
@@ -440,6 +465,30 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
             ))}
           </div>
         )}
+
+        <div>
+          <label className="text-sm font-medium">Recipe Role</label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Is this a complete meal or does it need to be paired with sides?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {RECIPE_ROLES.map((role) => (
+              <button
+                key={role.value}
+                type="button"
+                onClick={() => setSelectedRole(role.value)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
+                  selectedRole === role.value
+                    ? ROLE_COLORS[role.value]
+                    : "border-border/60 text-muted-foreground hover:border-primary/30"
+                )}
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div>
           <label className="text-sm font-medium">Meal Type</label>

@@ -80,6 +80,7 @@ export async function POST(req: Request) {
       steps: JSON.stringify(body.steps ?? []),
       tags: JSON.stringify(body.tags ?? []),
       mealTypes: JSON.stringify(body.mealTypes ?? ["dinner"]),
+      role: body.role ?? "complete",
       isQuick: totalMinutes <= 30,
       isSlowCook: false,
       leftoverFriendly: true,

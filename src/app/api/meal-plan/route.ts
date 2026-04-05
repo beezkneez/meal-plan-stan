@@ -68,6 +68,7 @@ export async function POST(req: Request) {
     leftoverFriendly: r.leftoverFriendly,
     tags: JSON.parse(r.tags) as string[],
     mealTypes: JSON.parse(r.mealTypes) as string[],
+    role: r.role,
   }));
 
   // Get user preferences for protein target

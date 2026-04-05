@@ -309,38 +309,75 @@ export function MealPlanGrid() {
                   </CardHeader>
                   <CardContent className="px-3 pb-3 pt-2 space-y-2">
                     {mealTypes.map((type) => {
-                      const slot = daySlots.find((s) => s.mealType === type);
-                      if (!slot) return null;
+                      const typeSlots = daySlots.filter((s) => s.mealType === type);
+                      if (typeSlots.length === 0) return null;
 
+                      // Single slot (complete meal or leftover)
+                      if (typeSlots.length === 1) {
+                        const slot = typeSlots[0];
+                        return (
+                          <div
+                            key={type}
+                            className={cn(
+                              "rounded-lg border border-border/50 border-l-[3px] p-2.5 text-xs transition-colors",
+                              MEAL_COLORS[type],
+                              slot.isLeftover
+                                ? "bg-muted/30 border-dashed border-l-solid"
+                                : "bg-card hover:bg-accent/20"
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="font-semibold capitalize text-muted-foreground text-[10px] uppercase tracking-wider">
+                                {type}
+                              </span>
+                              {slot.isLeftover && (
+                                <LinkIcon className="h-3 w-3 text-muted-foreground/50" />
+                              )}
+                            </div>
+                            <p className="font-medium text-[13px] truncate">
+                              {slot.recipe?.title ?? slot.notes ?? "Unassigned"}
+                            </p>
+                            <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                              <span>{slot.servings} srv</span>
+                              {slot.recipe?.proteinG && (
+                                <span className="text-terracotta">
+                                  {slot.recipe.proteinG}g P
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Multiple slots = composed meal (main + side + veggie)
                       return (
                         <div
                           key={type}
                           className={cn(
-                            "rounded-lg border border-border/50 border-l-[3px] p-2.5 text-xs transition-colors",
+                            "rounded-lg border border-border/50 border-l-[3px] p-2.5 text-xs",
                             MEAL_COLORS[type],
-                            slot.isLeftover
-                              ? "bg-muted/30 border-dashed border-l-solid"
-                              : "bg-card hover:bg-accent/20"
+                            "bg-card"
                           )}
                         >
-                          <div className="flex items-center gap-1.5 mb-1">
+                          <div className="flex items-center gap-1.5 mb-1.5">
                             <span className="font-semibold capitalize text-muted-foreground text-[10px] uppercase tracking-wider">
                               {type}
                             </span>
-                            {slot.isLeftover && (
-                              <LinkIcon className="h-3 w-3 text-muted-foreground/50" />
-                            )}
                           </div>
-                          <p className="font-medium text-[13px] truncate">
-                            {slot.recipe?.title ?? slot.notes ?? "Unassigned"}
-                          </p>
-                          <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                            <span>{slot.servings} srv</span>
-                            {slot.recipe?.proteinG && (
-                              <span className="text-terracotta">
-                                {slot.recipe.proteinG}g P
-                              </span>
-                            )}
+                          <div className="space-y-1">
+                            {typeSlots.map((slot, i) => (
+                              <div key={slot.id} className="flex items-baseline gap-1.5">
+                                <span className="text-muted-foreground/40 text-[10px]">
+                                  {i === 0 ? "+" : "+"}
+                                </span>
+                                <p className="font-medium text-[12px] truncate flex-1">
+                                  {slot.recipe?.title ?? slot.notes ?? "Unassigned"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2 text-muted-foreground mt-1.5">
+                            <span>{typeSlots[0].servings} srv</span>
                           </div>
                         </div>
                       );
