@@ -266,6 +266,7 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
   const [error, setError] = useState("");
   const [selectedMealTypes, setSelectedMealTypes] = useState<string[]>(["dinner"]);
   const [selectedRole, setSelectedRole] = useState("complete");
+  const [originalServings, setOriginalServings] = useState<number | null>(null);
 
   async function handleScrape() {
     setError("");
@@ -281,7 +282,9 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
         setError(data.error ?? "Failed to scrape");
         return;
       }
-      setScraped(await res.json());
+      const data = await res.json();
+      setScraped(data);
+      setOriginalServings(data.servings);
     } catch {
       setError("Network error");
     } finally {
@@ -367,9 +370,27 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
             <Input
               type="number"
               value={scraped.servings}
-              onChange={(e) =>
-                setScraped({ ...scraped, servings: Number(e.target.value) })
-              }
+              onChange={(e) => {
+                const newServings = Number(e.target.value);
+                if (!newServings || newServings < 1 || !originalServings) {
+                  setScraped({ ...scraped, servings: newServings });
+                  return;
+                }
+                const ratio = newServings / originalServings;
+                setScraped({
+                  ...scraped,
+                  servings: newServings,
+                  ingredients: scraped.ingredients.map((ing) => ({
+                    ...ing,
+                    qty: ing.qty != null ? Math.round(ing.qty * ratio * 100) / 100 : null,
+                  })),
+                  calories: scraped.calories != null ? Math.round(scraped.calories * ratio) : undefined,
+                  proteinG: scraped.proteinG != null ? Math.round(scraped.proteinG * ratio) : undefined,
+                  carbsG: scraped.carbsG != null ? Math.round(scraped.carbsG * ratio) : undefined,
+                  fatG: scraped.fatG != null ? Math.round(scraped.fatG * ratio) : undefined,
+                });
+                setOriginalServings(newServings);
+              }}
             />
           </div>
         </div>

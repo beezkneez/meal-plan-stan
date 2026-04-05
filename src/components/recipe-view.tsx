@@ -14,6 +14,8 @@ import {
   Beef,
   Wheat,
   Droplets,
+  Minus,
+  Plus,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -46,6 +48,7 @@ export function RecipeView({ id }: { id: string }) {
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(
     new Set()
   );
+  const [adjustedServings, setAdjustedServings] = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`/api/recipes/${id}`)
@@ -79,9 +82,34 @@ export function RecipeView({ id }: { id: string }) {
     );
   }
 
-  const ingredients: RecipeIngredient[] = JSON.parse(recipe.ingredients);
+  const rawIngredients: RecipeIngredient[] = JSON.parse(recipe.ingredients);
   const steps: string[] = JSON.parse(recipe.steps);
   const tags: string[] = JSON.parse(recipe.tags);
+
+  const currentServings = adjustedServings ?? recipe.servings;
+  const servingRatio = currentServings / recipe.servings;
+
+  // Scale ingredients by serving ratio
+  const ingredients = rawIngredients.map((ing) => ({
+    ...ing,
+    qty: ing.qty != null ? Math.round(ing.qty * servingRatio * 100) / 100 : null,
+  }));
+
+  function formatQty(qty: number): string {
+    if (qty === Math.floor(qty)) return String(qty);
+    // Common fractions
+    const frac = qty - Math.floor(qty);
+    const whole = Math.floor(qty);
+    const fractions: [number, string][] = [
+      [0.25, "¼"], [0.33, "⅓"], [0.5, "½"], [0.67, "⅔"], [0.75, "¾"],
+    ];
+    for (const [val, sym] of fractions) {
+      if (Math.abs(frac - val) < 0.05) {
+        return whole > 0 ? `${whole} ${sym}` : sym;
+      }
+    }
+    return qty.toFixed(1);
+  }
 
   function toggleIngredient(index: number) {
     setCheckedIngredients((prev) => {
@@ -95,28 +123,28 @@ export function RecipeView({ id }: { id: string }) {
   const macros = [
     recipe.calories != null && {
       label: "Calories",
-      value: recipe.calories,
+      value: Math.round(recipe.calories * servingRatio),
       unit: "kcal",
       icon: Flame,
       color: "text-amber-warm",
     },
     recipe.proteinG != null && {
       label: "Protein",
-      value: recipe.proteinG,
+      value: Math.round(recipe.proteinG * servingRatio),
       unit: "g",
       icon: Beef,
       color: "text-terracotta",
     },
     recipe.carbsG != null && {
       label: "Carbs",
-      value: recipe.carbsG,
+      value: Math.round(recipe.carbsG * servingRatio),
       unit: "g",
       icon: Wheat,
       color: "text-amber-deep",
     },
     recipe.fatG != null && {
       label: "Fat",
-      value: recipe.fatG,
+      value: Math.round(recipe.fatG * servingRatio),
       unit: "g",
       icon: Droplets,
       color: "text-indigo-shift",
@@ -190,7 +218,32 @@ export function RecipeView({ id }: { id: string }) {
         )}
         <div className="flex items-center gap-2 text-sm">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <span className="font-semibold">{recipe.servings} servings</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setAdjustedServings(Math.max(1, currentServings - 1))}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <span className="font-semibold min-w-[3ch] text-center tabular-nums">
+              {currentServings}
+            </span>
+            <button
+              onClick={() => setAdjustedServings(currentServings + 1)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+            <span className="text-muted-foreground ml-0.5">servings</span>
+            {adjustedServings && adjustedServings !== recipe.servings && (
+              <button
+                onClick={() => setAdjustedServings(null)}
+                className="text-xs text-primary hover:underline ml-1"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
         {recipe.sourceUrl && (
           <a
@@ -268,6 +321,11 @@ export function RecipeView({ id }: { id: string }) {
               <h2 className="font-display text-lg font-bold">Ingredients</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {ingredients.length} items &middot; Tap to check off
+                {adjustedServings && adjustedServings !== recipe.servings && (
+                  <span className="text-primary ml-1">
+                    &middot; Scaled to {currentServings} servings
+                  </span>
+                )}
               </p>
             </div>
             <CardContent className="p-0">
@@ -326,7 +384,7 @@ export function RecipeView({ id }: { id: string }) {
                           >
                             {ing.qty != null && (
                               <span className="font-semibold">
-                                {ing.qty}{" "}
+                                {formatQty(ing.qty)}{" "}
                               </span>
                             )}
                             {ing.unit && (
