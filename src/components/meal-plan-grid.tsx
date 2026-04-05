@@ -15,8 +15,10 @@ import {
   Calendar,
   AlertTriangle,
   Sparkles,
+  ShoppingCart,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
 
 interface MealSlotData {
@@ -65,6 +67,7 @@ export function MealPlanGrid() {
   const [lunchDays, setLunchDays] = useState<number[]>([0, 6]); // Sun, Sat by default
   const [includBreakfast, setIncludeBreakfast] = useState(true);
   const [recipeCount, setRecipeCount] = useState<number | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     fetch("/api/meal-plan")
@@ -318,6 +321,21 @@ export function MealPlanGrid() {
           </CardContent>
         </Card>
       ) : (
+        <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {plan.slots.length} meals planned &middot;{" "}
+            {format(new Date(plan.startDate + "T12:00:00"), "MMM d")} &ndash;{" "}
+            {format(new Date(plan.endDate + "T12:00:00"), "MMM d")}
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/shopping-list")}
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Shopping List
+          </Button>
+        </div>
         <div className="overflow-x-auto -mx-5 px-5 pb-2">
           <div
             className="grid gap-3"
@@ -365,9 +383,18 @@ export function MealPlanGrid() {
                                 <LinkIcon className="h-3 w-3 text-muted-foreground/50" />
                               )}
                             </div>
-                            <p className="font-medium text-[13px] truncate">
-                              {slot.recipe?.title ?? slot.notes ?? "Unassigned"}
-                            </p>
+                            {slot.recipe ? (
+                              <Link
+                                href={`/recipes/${slot.recipe.id}`}
+                                className="font-medium text-[13px] truncate block hover:text-primary transition-colors"
+                              >
+                                {slot.recipe.title}
+                              </Link>
+                            ) : (
+                              <p className="font-medium text-[13px] truncate">
+                                {slot.notes ?? "Unassigned"}
+                              </p>
+                            )}
                             <div className="flex items-center gap-2 text-muted-foreground mt-1">
                               <span>{slot.servings} srv</span>
                               {slot.recipe?.proteinG && (
@@ -399,11 +426,20 @@ export function MealPlanGrid() {
                             {typeSlots.map((slot, i) => (
                               <div key={slot.id} className="flex items-baseline gap-1.5">
                                 <span className="text-muted-foreground/40 text-[10px]">
-                                  {i === 0 ? "+" : "+"}
+                                  {i === 0 ? "\u2022" : "+"}
                                 </span>
-                                <p className="font-medium text-[12px] truncate flex-1">
-                                  {slot.recipe?.title ?? slot.notes ?? "Unassigned"}
-                                </p>
+                                {slot.recipe ? (
+                                  <Link
+                                    href={`/recipes/${slot.recipe.id}`}
+                                    className="font-medium text-[12px] truncate flex-1 hover:text-primary transition-colors"
+                                  >
+                                    {slot.recipe.title}
+                                  </Link>
+                                ) : (
+                                  <p className="font-medium text-[12px] truncate flex-1">
+                                    {slot.notes ?? "Unassigned"}
+                                  </p>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -418,6 +454,7 @@ export function MealPlanGrid() {
               );
             })}
           </div>
+        </div>
         </div>
       )}
     </div>
