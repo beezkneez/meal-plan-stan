@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { scrapeRecipe } from "./scraper";
 
 interface DiscoveredRecipe {
   title: string;
@@ -17,7 +18,7 @@ interface DiscoveredRecipe {
   steps: string[];
   tags: string[];
   mealTypes: string[];
-  source: "spoonacular" | "ai";
+  source: "spoonacular" | "ai" | "hellofresh";
 }
 
 // ── Spoonacular ──
@@ -135,6 +136,80 @@ export async function searchSpoonacular(
         source: "spoonacular" as const,
       };
     });
+  } catch {
+    return [];
+  }
+}
+
+// ── HelloFresh ──
+
+export async function searchHelloFresh(
+  query: string,
+  count: number = 6,
+  offset: number = 0
+): Promise<DiscoveredRecipe[]> {
+  try {
+    // HelloFresh has a public API for recipe search
+    const params = new URLSearchParams({
+      q: query,
+      offset: String(offset),
+      limit: String(count),
+      country: "ca",
+      locale: "en-CA",
+    });
+
+    const res = await fetch(
+      `https://www.hellofresh.ca/search?${params}`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; MealPlanStan/1.0)",
+        },
+      }
+    );
+
+    if (!res.ok) return [];
+
+    const html = await res.text();
+
+    // Extract recipe URLs from the search results page
+    const urlMatches = html.match(/href="(\/recipes\/[^"]+)"/g) ?? [];
+    const recipeUrls = [...new Set(
+      urlMatches
+        .map((m) => m.match(/href="([^"]+)"/)?.[1])
+        .filter(Boolean)
+        .map((path) => `https://www.hellofresh.ca${path}`)
+    )].slice(offset, offset + count);
+
+    // Scrape each recipe URL
+    const results = await Promise.allSettled(
+      recipeUrls.slice(0, count).map(async (url) => {
+        const scraped = await scrapeRecipe(url);
+        const result: DiscoveredRecipe = {
+          title: scraped.title,
+          description: "",
+          imageUrl: scraped.imageUrl,
+          sourceUrl: url,
+          prepMinutes: scraped.prepMinutes,
+          cookMinutes: scraped.cookMinutes,
+          totalMinutes: scraped.totalMinutes,
+          servings: scraped.servings,
+          calories: scraped.calories,
+          proteinG: scraped.proteinG,
+          carbsG: scraped.carbsG,
+          fatG: scraped.fatG,
+          ingredients: scraped.ingredients,
+          steps: scraped.steps,
+          tags: scraped.tags,
+          mealTypes: ["dinner"],
+          source: "hellofresh",
+        };
+        return result;
+      })
+    );
+
+    return results
+      .filter((r): r is PromiseFulfilledResult<DiscoveredRecipe> => r.status === "fulfilled")
+      .map((r) => r.value);
   } catch {
     return [];
   }

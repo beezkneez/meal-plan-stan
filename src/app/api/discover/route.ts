@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import {
   searchSpoonacular,
   generateAIRecipes,
+  searchHelloFresh,
 } from "@/lib/recipe-discovery";
 
 export async function GET(req: Request) {
@@ -35,9 +36,18 @@ export async function GET(req: Request) {
 
   let recipes: Awaited<ReturnType<typeof searchSpoonacular>> = [];
 
-  if (source === "spoonacular" || source === "both") {
+  if (source === "hellofresh") {
+    const hfResults = await searchHelloFresh(query, 6, offset);
+    recipes.push(...hfResults);
+  } else if (source === "spoonacular" || source === "both") {
     const spoonResults = await searchSpoonacular(query, mealType, 6, offset);
     recipes.push(...spoonResults);
+
+    // Also try HelloFresh for more variety
+    if (source === "both") {
+      const hfResults = await searchHelloFresh(query, 3, offset);
+      recipes.push(...hfResults);
+    }
   }
 
   if (source === "ai" || (source === "both" && recipes.length < 3)) {

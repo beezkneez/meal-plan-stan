@@ -16,7 +16,16 @@ import {
   AlertTriangle,
   Sparkles,
   ShoppingCart,
+  Pencil,
+  Check,
+  Search,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
@@ -69,6 +78,14 @@ export function MealPlanGrid() {
   const [recipeCount, setRecipeCount] = useState<number | null>(null);
   const router = useRouter();
 
+  // Slot editor
+  const [editingSlot, setEditingSlot] = useState<MealSlotData | null>(null);
+  const [editMode, setEditMode] = useState<"custom" | "recipe">("custom");
+  const [customText, setCustomText] = useState("");
+  const [recipeSearch, setRecipeSearch] = useState("");
+  const [userRecipes, setUserRecipes] = useState<{ id: string; title: string; imageUrl: string | null }[]>([]);
+  const [savingSlot, setSavingSlot] = useState(false);
+
   // Serving settings
   const [householdSize, setHouseholdSize] = useState(3); // full family
   const [workDayHeadcount, setWorkDayHeadcount] = useState(2); // who eats when you're working
@@ -95,6 +112,94 @@ export function MealPlanGrid() {
         ? prev.filter((d) => d !== dayIndex)
         : [...prev, dayIndex]
     );
+  }
+
+  function openSlotEditor(slot: MealSlotData) {
+    setEditingSlot(slot);
+    setCustomText(slot.notes ?? slot.recipe?.title ?? "");
+    setEditMode(slot.recipe ? "recipe" : "custom");
+    setRecipeSearch("");
+    // Load recipes for picker
+    if (userRecipes.length === 0) {
+      fetch("/api/recipes")
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setUserRecipes(data.map((r: { id: string; title: string; imageUrl: string | null }) => ({
+              id: r.id,
+              title: r.title,
+              imageUrl: r.imageUrl,
+            })));
+          }
+        })
+        .catch(() => {});
+    }
+  }
+
+  async function saveSlotCustom() {
+    if (!editingSlot) return;
+    setSavingSlot(true);
+    try {
+      const res = await fetch("/api/meal-plan/slot", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slotId: editingSlot.id,
+          recipeId: null,
+          notes: customText,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPlan((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            slots: prev.slots.map((s) =>
+              s.id === editingSlot.id
+                ? { ...s, recipeId: null, recipe: null, notes: customText, isLeftover: false }
+                : s
+            ),
+          };
+        });
+        setEditingSlot(null);
+      }
+    } finally {
+      setSavingSlot(false);
+    }
+  }
+
+  async function saveSlotRecipe(recipeId: string) {
+    if (!editingSlot) return;
+    setSavingSlot(true);
+    try {
+      const res = await fetch("/api/meal-plan/slot", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slotId: editingSlot.id,
+          recipeId,
+          notes: null,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setPlan((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            slots: prev.slots.map((s) =>
+              s.id === editingSlot.id
+                ? { ...s, recipeId: updated.recipeId, recipe: updated.recipe, notes: null, isLeftover: false }
+                : s
+            ),
+          };
+        });
+        setEditingSlot(null);
+      }
+    } finally {
+      setSavingSlot(false);
+    }
   }
 
   async function generatePlan() {
@@ -454,8 +559,9 @@ export function MealPlanGrid() {
                         return (
                           <div
                             key={type}
+                            onClick={() => openSlotEditor(slot)}
                             className={cn(
-                              "rounded-lg border border-border/50 border-l-[3px] p-2.5 text-xs transition-colors",
+                              "rounded-lg border border-border/50 border-l-[3px] p-2.5 text-xs transition-colors cursor-pointer group/slot",
                               MEAL_COLORS[type],
                               slot.isLeftover
                                 ? "bg-muted/30 border-dashed border-l-solid"
@@ -469,6 +575,7 @@ export function MealPlanGrid() {
                               {slot.isLeftover && (
                                 <LinkIcon className="h-3 w-3 text-muted-foreground/50" />
                               )}
+                              <Pencil className="h-2.5 w-2.5 text-muted-foreground/0 group-hover/slot:text-muted-foreground/40 transition-colors ml-auto" />
                             </div>
                             {slot.recipe ? (
                               <Link
@@ -544,6 +651,109 @@ export function MealPlanGrid() {
         </div>
         </div>
       )}
+      {/* Slot editor dialog */}
+      <Dialog open={!!editingSlot} onOpenChange={(open) => !open && setEditingSlot(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg">
+              Edit {editingSlot?.mealType} — {editingSlot?.date ? format(new Date(editingSlot.date.split("T")[0] + "T12:00:00"), "EEE, MMM d") : ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Mode toggle */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditMode("custom")}
+              className={cn(
+                "flex-1 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all",
+                editMode === "custom"
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-border/60 text-muted-foreground"
+              )}
+            >
+              Type custom
+            </button>
+            <button
+              onClick={() => setEditMode("recipe")}
+              className={cn(
+                "flex-1 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all",
+                editMode === "recipe"
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-border/60 text-muted-foreground"
+              )}
+            >
+              Pick a recipe
+            </button>
+          </div>
+
+          {editMode === "custom" ? (
+            <div className="space-y-3">
+              <Input
+                placeholder="e.g. Bagel and yogurt parfait"
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveSlotCustom()}
+                autoFocus
+              />
+              <Button
+                onClick={saveSlotCustom}
+                disabled={savingSlot || !customText.trim()}
+                className="w-full"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                {savingSlot ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search your recipes..."
+                  value={recipeSearch}
+                  onChange={(e) => setRecipeSearch(e.target.value)}
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-60 overflow-y-auto space-y-1">
+                {userRecipes
+                  .filter((r) =>
+                    r.title.toLowerCase().includes(recipeSearch.toLowerCase())
+                  )
+                  .map((recipe) => (
+                    <button
+                      key={recipe.id}
+                      onClick={() => saveSlotRecipe(recipe.id)}
+                      disabled={savingSlot}
+                      className="flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-left text-sm hover:bg-accent/30 transition-colors"
+                    >
+                      {recipe.imageUrl ? (
+                        <img
+                          src={recipe.imageUrl}
+                          alt=""
+                          className="h-8 w-8 rounded-md object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                          <ChefHat className="h-4 w-4 text-muted-foreground/40" />
+                        </div>
+                      )}
+                      <span className="font-medium truncate">{recipe.title}</span>
+                    </button>
+                  ))}
+                {userRecipes.filter((r) =>
+                  r.title.toLowerCase().includes(recipeSearch.toLowerCase())
+                ).length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No recipes found
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

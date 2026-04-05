@@ -37,7 +37,7 @@ interface DiscoveredRecipe {
   steps: string[];
   tags: string[];
   mealTypes: string[];
-  source: "spoonacular" | "ai";
+  source: "spoonacular" | "ai" | "hellofresh";
 }
 
 const MEAL_TYPE_FILTERS = [
@@ -79,6 +79,7 @@ export function RecipeDiscovery() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
+  const [source, setSource] = useState("both");
 
   async function search(q?: string) {
     const searchQuery = q ?? query;
@@ -93,7 +94,7 @@ export function RecipeDiscovery() {
       const params = new URLSearchParams({
         q: searchQuery,
         mealType,
-        source: "both",
+        source,
         offset: "0",
       });
       const res = await fetch(`/api/discover?${params}`);
@@ -117,7 +118,7 @@ export function RecipeDiscovery() {
       const params = new URLSearchParams({
         q: searchQuery,
         mealType,
-        source: "both",
+        source,
         offset: String(nextPage * 10),
       });
       const res = await fetch(`/api/discover?${params}`);
@@ -208,6 +209,29 @@ export function RecipeDiscovery() {
         ))}
       </div>
 
+      {/* Source filter */}
+      <div className="flex flex-wrap gap-2">
+        {[
+          { value: "both", label: "All Sources" },
+          { value: "hellofresh", label: "HelloFresh" },
+          { value: "spoonacular", label: "Web Recipes" },
+          { value: "ai", label: "AI Generated" },
+        ].map((s) => (
+          <button
+            key={s.value}
+            onClick={() => setSource(s.value)}
+            className={cn(
+              "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all duration-200",
+              source === s.value
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border/60 text-muted-foreground hover:border-primary/30"
+            )}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
       {/* Quick searches */}
       {recipes.length === 0 && !searching && (
         <div>
@@ -275,13 +299,20 @@ export function RecipeDiscovery() {
                             "text-[10px] font-medium",
                             recipe.source === "ai"
                               ? "bg-indigo-shift/80 text-white"
-                              : "bg-black/60 text-white"
+                              : recipe.source === "hellofresh"
+                                ? "bg-green-600/80 text-white"
+                                : "bg-black/60 text-white"
                           )}
                         >
                           {recipe.source === "ai" ? (
                             <>
                               <Bot className="h-3 w-3 mr-1" />
                               AI
+                            </>
+                          ) : recipe.source === "hellofresh" ? (
+                            <>
+                              <ChefHat className="h-3 w-3 mr-1" />
+                              HelloFresh
                             </>
                           ) : (
                             <>
