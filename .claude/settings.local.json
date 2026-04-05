@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/judbe/OneDrive/Desktop/**)",
+      "Bash(npx create-next-app@latest meal-plan-stan --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-pnpm)",
+      "Bash(rm -rf /c/Users/judbe/OneDrive/Desktop/meal-plan-stan)",
+      "Bash(npx create-next-app@latest meal-plan-stan --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm)",
+      "Bash(npx create-next-app@latest meal-plan-stan --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)"
+    ]
+  }
+}
