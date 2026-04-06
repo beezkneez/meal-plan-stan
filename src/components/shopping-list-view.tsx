@@ -31,6 +31,65 @@ interface GrocerySection {
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Practical approximations for common items
+const PRACTICAL_UNITS: Record<string, { perUnit: number; label: string }> = {
+  "broccoli": { perUnit: 250, label: "crown" },
+  "lettuce": { perUnit: 400, label: "head" },
+  "romaine": { perUnit: 350, label: "head" },
+  "iceberg": { perUnit: 500, label: "head" },
+  "cabbage": { perUnit: 900, label: "head" },
+  "cauliflower": { perUnit: 600, label: "head" },
+  "onion": { perUnit: 150, label: "onion" },
+  "potato": { perUnit: 170, label: "potato" },
+  "sweet potato": { perUnit: 200, label: "potato" },
+  "carrot": { perUnit: 70, label: "carrot" },
+  "celery": { perUnit: 450, label: "bunch" },
+  "garlic": { perUnit: 40, label: "head" },
+  "bell pepper": { perUnit: 150, label: "pepper" },
+  "tomato": { perUnit: 150, label: "tomato" },
+  "cucumber": { perUnit: 300, label: "cucumber" },
+  "avocado": { perUnit: 170, label: "avocado" },
+  "lemon": { perUnit: 80, label: "lemon" },
+  "lime": { perUnit: 60, label: "lime" },
+  "banana": { perUnit: 120, label: "banana" },
+  "apple": { perUnit: 180, label: "apple" },
+  "zucchini": { perUnit: 200, label: "zucchini" },
+};
+
+function formatSmartQty(qty: number, unit: string, itemName: string): string {
+  const name = itemName.toLowerCase();
+
+  // Convert grams to lbs for meats
+  if ((unit === "g" || unit === "gram" || unit === "grams") && qty >= 100) {
+    const isMeat = /beef|chicken|pork|turkey|lamb|steak|ground|sausage|bacon|ham|roast|brisket|ribs|thigh|breast|drumstick|wing|mince|veal/i.test(name);
+    if (isMeat) {
+      const lbs = qty / 453.6;
+      return `${Math.round(qty)}g (${lbs.toFixed(1)} lb)`;
+    }
+
+    // Check for practical produce approximations
+    for (const [key, info] of Object.entries(PRACTICAL_UNITS)) {
+      if (name.includes(key)) {
+        const count = Math.ceil(qty / info.perUnit);
+        return `${Math.round(qty)}g (~${count} ${info.label}${count > 1 ? "s" : ""})`;
+      }
+    }
+  }
+
+  // Convert ml to cups for liquids
+  if ((unit === "ml" || unit === "milliliter") && qty >= 240) {
+    const cups = qty / 240;
+    return `${Math.round(qty)}ml (~${cups.toFixed(1)} cups)`;
+  }
+
+  // Hide junk units
+  if (/^(units?|unit\(s\)|counts?|pieces?|items?|servings?)$/i.test(unit.trim())) {
+    return `${qty}`;
+  }
+
+  return `${qty} ${unit}`;
+}
+
 export function ShoppingListView() {
   const [sections, setSections] = useState<GrocerySection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -374,7 +433,7 @@ export function ShoppingListView() {
                         {item.fromPantry ? (
                           <span className="text-sage">In pantry</span>
                         ) : (
-                          <>{item.qty}{item.unit && !/^(units?|unit\(s\)|counts?|pieces?|items?|servings?)$/i.test(item.unit.trim()) ? ` ${item.unit}` : ""}</>
+                          <>{formatSmartQty(item.qty, item.unit, item.name)}</>
                         )}
                       </span>
 

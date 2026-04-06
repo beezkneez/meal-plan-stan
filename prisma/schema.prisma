@@ -129,6 +129,7 @@ model Recipe {
   tags        String @default("[]")
   mealTypes   String @default("[\"dinner\"]") // ["breakfast","lunch","dinner","snack"]
   role        String @default("complete") // "complete","main","side","veggie","soup","salad"
+  rating      Int    @default(0) // 0=unrated, 1-5 stars
 
   // Planner flags
   isQuick          Boolean @default(false)

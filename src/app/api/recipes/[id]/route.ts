@@ -56,6 +56,7 @@ export async function PUT(
       tags: JSON.stringify(body.tags ?? []),
       mealTypes: JSON.stringify(body.mealTypes ?? ["dinner"]),
       role: body.role ?? "complete",
+      rating: body.rating ?? 0,
       isQuick: totalMinutes <= 30,
       isSlowCook: body.isSlowCook ?? false,
       leftoverFriendly: body.leftoverFriendly ?? true,

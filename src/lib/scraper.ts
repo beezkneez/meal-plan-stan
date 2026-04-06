@@ -125,7 +125,8 @@ function heuristicScrape(
 }
 
 function parseIngredientsList(items: string[]): RecipeIngredient[] {
-  return items.map((text) => {
+  return items.map((raw) => {
+    const text = stripHtml(raw);
     // Simple parse: try to extract qty and unit from the beginning
     const match = text.match(
       /^([\d./½⅓⅔¼¾⅛]+(?:\s*[-–]\s*[\d./]+)?)\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|kg|ml|l|cloves?|cans?|pieces?|slices?|stalks?)?\s*(.+)/i
@@ -213,24 +214,37 @@ function parseNutritionValue(val: string | undefined): number | undefined {
 function parseSteps(instructions: unknown): string[] {
   if (!instructions) return [];
   if (typeof instructions === "string") {
-    return instructions
+    return stripHtml(instructions)
       .split(/\n+/)
       .map((s) => s.trim())
       .filter(Boolean);
   }
   if (Array.isArray(instructions)) {
     return instructions.flatMap((item) => {
-      if (typeof item === "string") return [item];
-      if (item.text) return [item.text];
+      if (typeof item === "string") return [stripHtml(item)];
+      if (item.text) return [stripHtml(item.text)];
       if (item.itemListElement) {
         return (item.itemListElement as Array<{ text: string }>).map(
-          (sub) => sub.text
+          (sub) => stripHtml(sub.text)
         );
       }
       return [];
     });
   }
   return [];
+}
+
+function stripHtml(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, "") // remove HTML tags
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseTags(data: Record<string, unknown>): string[] {

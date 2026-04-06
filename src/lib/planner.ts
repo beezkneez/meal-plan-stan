@@ -17,7 +17,8 @@ interface PlannerRecipe {
   leftoverFriendly: boolean;
   tags: string[];
   mealTypes: string[];
-  role: string; // "complete","main","side","veggie","soup","salad"
+  role: string;
+  rating: number; // 0=unrated, 1-5
 }
 
 interface PlannedSlot {
@@ -345,11 +346,15 @@ function pickRecipe(
     const quickScore =
       busyness === "busy" && (recipe.isQuick || recipe.isSlowCook) ? 1 : 0.7;
 
+    // 5-star = 1.0, 3-star = 0.6, unrated = 0.5
+    const ratingScore = recipe.rating > 0 ? recipe.rating / 5 : 0.5;
+
     const score =
-      varietyScore * 0.45 +
-      proteinScore * 0.2 +
+      varietyScore * 0.35 +
+      ratingScore * 0.2 +
+      proteinScore * 0.15 +
       leftoverScore * 0.15 +
-      quickScore * 0.2;
+      quickScore * 0.15;
 
     return { recipe, score };
   });

@@ -21,6 +21,7 @@ import {
   Save,
   X,
   Trash2,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -48,6 +49,7 @@ interface RecipeData {
   isQuick: boolean;
   isSlowCook: boolean;
   leftoverFriendly: boolean;
+  rating: number;
 }
 
 const RECIPE_ROLES = [
@@ -766,6 +768,32 @@ export function RecipeView({ id }: { id: string }) {
             Original recipe
           </a>
         )}
+        {/* Star rating */}
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              onClick={async () => {
+                const newRating = recipe.rating === star ? 0 : star;
+                setRecipe({ ...recipe, rating: newRating });
+                await fetch(`/api/recipes/${id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ rating: newRating }),
+                });
+              }}
+            >
+              <Star
+                className={cn(
+                  "h-5 w-5 transition-colors",
+                  star <= recipe.rating
+                    ? "fill-amber-warm text-amber-warm"
+                    : "text-border hover:text-amber-warm/50"
+                )}
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tags */}

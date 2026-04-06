@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     tags: JSON.parse(r.tags) as string[],
     mealTypes: JSON.parse(r.mealTypes) as string[],
     role: r.role,
+    rating: r.rating,
   }));
 
   // Get user preferences for protein target

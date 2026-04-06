@@ -21,6 +21,7 @@ import {
   Trash2,
   ChefHat,
   Eye,
+  Star,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,7 @@ interface Recipe {
   tags: string;
   mealTypes: string;
   role: string;
+  rating: number;
   isQuick: boolean;
 }
 
@@ -88,6 +90,17 @@ export function RecipeList() {
   async function deleteRecipe(id: string) {
     await fetch(`/api/recipes/${id}`, { method: "DELETE" });
     setRecipes((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  async function rateRecipe(id: string, rating: number) {
+    setRecipes((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, rating } : r))
+    );
+    await fetch(`/api/recipes/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating }),
+    });
   }
 
   return (
@@ -207,6 +220,29 @@ export function RecipeList() {
                     {recipe.calories && (
                       <span className="text-xs">{recipe.calories} cal</span>
                     )}
+                  </div>
+                  {/* Star rating */}
+                  <div className="flex gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          rateRecipe(recipe.id, recipe.rating === star ? 0 : star);
+                        }}
+                        className="p-0"
+                      >
+                        <Star
+                          className={cn(
+                            "h-3.5 w-3.5 transition-colors",
+                            star <= recipe.rating
+                              ? "fill-amber-warm text-amber-warm"
+                              : "text-border hover:text-amber-warm/50"
+                          )}
+                        />
+                      </button>
+                    ))}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge
