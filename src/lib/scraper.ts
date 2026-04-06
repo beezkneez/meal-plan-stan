@@ -214,18 +214,15 @@ function parseNutritionValue(val: string | undefined): number | undefined {
 function parseSteps(instructions: unknown): string[] {
   if (!instructions) return [];
   if (typeof instructions === "string") {
-    return stripHtml(instructions)
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    return splitHtmlSteps(instructions);
   }
   if (Array.isArray(instructions)) {
     return instructions.flatMap((item) => {
-      if (typeof item === "string") return [stripHtml(item)];
-      if (item.text) return [stripHtml(item.text)];
+      if (typeof item === "string") return splitHtmlSteps(item);
+      if (item.text) return splitHtmlSteps(item.text);
       if (item.itemListElement) {
-        return (item.itemListElement as Array<{ text: string }>).map(
-          (sub) => stripHtml(sub.text)
+        return (item.itemListElement as Array<{ text: string }>).flatMap(
+          (sub) => splitHtmlSteps(sub.text)
         );
       }
       return [];
@@ -236,15 +233,36 @@ function parseSteps(instructions: unknown): string[] {
 
 function stripHtml(text: string): string {
   return text
-    .replace(/<[^>]+>/g, "") // remove HTML tags
+    .replace(/<\/li>\s*<li>/gi, ". ")
+    .replace(/<ul>\s*/gi, "")
+    .replace(/<\/ul>\s*/gi, "")
+    .replace(/<ol>\s*/gi, "")
+    .replace(/<\/ol>\s*/gi, "")
+    .replace(/<li>\s*/gi, "")
+    .replace(/<\/li>\s*/gi, "")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/\*\*/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function splitHtmlSteps(text: string): string[] {
+  if (/<li>/i.test(text)) {
+    return text
+      .split(/<\/li>\s*<li>/i)
+      .map((s) => stripHtml(s))
+      .filter((s) => s.length > 0);
+  }
+  const cleaned = stripHtml(text);
+  return cleaned ? [cleaned] : [];
 }
 
 function parseTags(data: Record<string, unknown>): string[] {
