@@ -107,26 +107,31 @@ export function MealPlanGrid() {
       .catch(() => {});
 
     fetch("/api/schedule")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.pattern) setScheduleData(data);
-      })
+      .then((r) => { if (r.ok) return r.json(); return null; })
+      .then((data) => { if (data?.pattern) setScheduleData(data); })
       .catch(() => {});
 
     fetch("/api/calendars/events?days=16")
-      .then((r) => r.json())
-      .then((data) => setCalendarEvents(data.events ?? []))
+      .then((r) => { if (r.ok) return r.json(); return null; })
+      .then((data) => { if (data?.events) setCalendarEvents(data.events); })
       .catch(() => {});
   }, []);
 
   function getShiftForDate(dateStr: string): string | null {
-    if (!scheduleData) return null;
-    const pattern = JSON.parse(scheduleData.pattern) as { day: number; shift: string }[];
-    const anchor = new Date(scheduleData.anchorDate);
-    const date = new Date(dateStr + "T12:00:00");
-    const daysDiff = differenceInDays(date, anchor);
-    const index = ((daysDiff % 16) + 16) % 16;
-    return pattern[index]?.shift ?? null;
+    try {
+      if (!scheduleData?.pattern || !scheduleData?.anchorDate) return null;
+      const pattern = JSON.parse(scheduleData.pattern) as { day: number; shift: string }[];
+      if (!Array.isArray(pattern) || pattern.length === 0) return null;
+      const anchor = new Date(scheduleData.anchorDate);
+      const date = new Date(dateStr + "T12:00:00");
+      if (isNaN(anchor.getTime()) || isNaN(date.getTime())) return null;
+      const daysDiff = differenceInDays(date, anchor);
+      const index = ((daysDiff % 16) + 16) % 16;
+      const shift = pattern[index]?.shift;
+      return shift === "OFF" ? null : shift ?? null;
+    } catch {
+      return null;
+    }
   }
 
   function getEventsForDate(dateStr: string) {
