@@ -23,6 +23,7 @@ import {
   Eye,
   Star,
   Upload,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,9 @@ export function RecipeList() {
   const [bulkText, setBulkText] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResult, setBulkResult] = useState("");
+  const [parsedRecipes, setParsedRecipes] = useState<{ title: string; ingredients: unknown[]; steps: string[] }[]>([]);
+  const [selectedRecipes, setSelectedRecipes] = useState<Set<number>>(new Set());
+  const [parsing, setParsing] = useState(false);
 
   async function loadRecipes() {
     const res = await fetch(`/api/recipes?q=${encodeURIComponent(search)}`);
@@ -149,55 +153,172 @@ export function RecipeList() {
       {bulkImportOpen && (
         <Card className="border-border/60 overflow-hidden">
           <CardContent className="py-5 space-y-3">
-            <div>
-              <p className="text-sm font-semibold">Import from CopyMeThat</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Go to CopyMeThat → Settings → Export Recipes. Open the exported file,
-                select all (Ctrl+A), copy (Ctrl+C), and paste below.
-              </p>
-            </div>
-            <textarea
-              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring min-h-[120px]"
-              placeholder="Paste your CopyMeThat export here..."
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-            />
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={async () => {
-                  setBulkImporting(true);
-                  setBulkResult("");
-                  try {
-                    const res = await fetch("/api/recipes/import", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ text: bulkText, format: "copymethat" }),
-                    });
-                    const data = await res.json();
-                    if (data.imported > 0) {
-                      setBulkResult(`Imported ${data.imported} recipes!`);
-                      setBulkText("");
-                      loadRecipes();
-                    } else {
-                      setBulkResult(data.error ?? "No recipes found.");
+            {parsedRecipes.length === 0 ? (
+              <>
+                <div>
+                  <p className="text-sm font-semibold">Import from CopyMeThat</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Go to CopyMeThat → Settings → Export Recipes. Open the exported file,
+                    select all (Ctrl+A), copy (Ctrl+C), and paste below.
+                  </p>
+                </div>
+                <textarea
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring min-h-[120px]"
+                  placeholder="Paste your CopyMeThat export here..."
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                />
+                <Button
+                  onClick={async () => {
+                    setParsing(true);
+                    setBulkResult("");
+                    try {
+                      const res = await fetch("/api/recipes/import", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ text: bulkText, format: "copymethat", parseOnly: true }),
+                      });
+                      const data = await res.json();
+                      if (data.recipes?.length > 0) {
+                        setParsedRecipes(data.recipes);
+                        setSelectedRecipes(new Set(data.recipes.map((_: unknown, i: number) => i)));
+                      } else {
+                        setBulkResult("No recipes found in the pasted text.");
+                      }
+                    } finally {
+                      setParsing(false);
                     }
-                  } finally {
-                    setBulkImporting(false);
-                  }
-                }}
-                disabled={bulkImporting || !bulkText.trim()}
-              >
-                {bulkImporting ? "Importing..." : "Import Recipes"}
-              </Button>
-              {bulkResult && (
-                <p className={cn(
-                  "text-sm font-medium",
-                  bulkResult.startsWith("Imported") ? "text-sage" : "text-destructive"
-                )}>
-                  {bulkResult}
-                </p>
-              )}
-            </div>
+                  }}
+                  disabled={parsing || !bulkText.trim()}
+                >
+                  {parsing ? "Scanning..." : "Scan Recipes"}
+                </Button>
+                {bulkResult && (
+                  <p className="text-sm text-destructive">{bulkResult}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      Found {parsedRecipes.length} recipes
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedRecipes.size} selected for import
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (selectedRecipes.size === parsedRecipes.length) {
+                          setSelectedRecipes(new Set());
+                        } else {
+                          setSelectedRecipes(new Set(parsedRecipes.map((_, i) => i)));
+                        }
+                      }}
+                    >
+                      {selectedRecipes.size === parsedRecipes.length ? "Deselect All" : "Select All"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="max-h-[400px] overflow-y-auto space-y-1 rounded-xl border border-border/60 p-1">
+                  {parsedRecipes.map((r, i) => {
+                    const selected = selectedRecipes.has(i);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setSelectedRecipes((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(i)) next.delete(i);
+                            else next.add(i);
+                            return next;
+                          });
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-left text-sm transition-all",
+                          selected ? "bg-primary/5" : "hover:bg-accent/20"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all",
+                            selected ? "bg-primary border-primary" : "border-border"
+                          )}
+                        >
+                          {selected && (
+                            <Check className="h-3 w-3 text-primary-foreground" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{r.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {r.ingredients.length} ingredients &middot; {r.steps.length} steps
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={async () => {
+                      setBulkImporting(true);
+                      setBulkResult("");
+                      try {
+                        const res = await fetch("/api/recipes/import", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            text: bulkText,
+                            format: "copymethat",
+                            selected: [...selectedRecipes],
+                          }),
+                        });
+                        const data = await res.json();
+                        if (data.imported > 0) {
+                          setBulkResult(`Imported ${data.imported} recipes!`);
+                          setBulkText("");
+                          setParsedRecipes([]);
+                          setSelectedRecipes(new Set());
+                          loadRecipes();
+                        } else {
+                          setBulkResult(data.error ?? "No recipes imported.");
+                        }
+                      } finally {
+                        setBulkImporting(false);
+                      }
+                    }}
+                    disabled={bulkImporting || selectedRecipes.size === 0}
+                  >
+                    {bulkImporting ? "Importing..." : `Import ${selectedRecipes.size} Recipes`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setParsedRecipes([]);
+                      setSelectedRecipes(new Set());
+                      setBulkResult("");
+                    }}
+                  >
+                    Back
+                  </Button>
+                  {bulkResult && (
+                    <p className={cn(
+                      "text-sm font-medium",
+                      bulkResult.startsWith("Imported") ? "text-sage" : "text-destructive"
+                    )}>
+                      {bulkResult}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

@@ -197,9 +197,19 @@ export async function POST(req: Request) {
     });
   }
 
-  // Import all parsed recipes
+  // If parseOnly flag, return parsed recipes for preview without importing
+  if (body.parseOnly) {
+    return NextResponse.json({ recipes: parsed, total: parsed.length });
+  }
+
+  // Import selected recipes (or all if no selection)
+  const selectedIndices: number[] | null = body.selected ?? null;
+  const toImport = selectedIndices
+    ? parsed.filter((_, i) => selectedIndices.includes(i))
+    : parsed;
+
   let imported = 0;
-  for (const r of parsed) {
+  for (const r of toImport) {
     const totalMinutes = (r.prepMinutes || 0) + (r.cookMinutes || 0);
     await prisma.recipe.create({
       data: {
