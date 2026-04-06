@@ -97,11 +97,7 @@ export function MealPlanGrid() {
   const [leftoverMode, setLeftoverMode] = useState(true); // make extra dinner for next day lunch
   const [leftoverPortions, setLeftoverPortions] = useState(3); // how many leftover portions
   const [easyWorkNightMeals, setEasyWorkNightMeals] = useState(true);
-  const [showImages, setShowImages] = useState(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem("mealPlanShowImages");
-    return saved !== null ? saved === "true" : true;
-  });
+  const [showImages, setShowImages] = useState(true);
 
   // Schedule + events for day tags
   const [scheduleData, setScheduleData] = useState<{ pattern: string; anchorDate: string } | null>(null);
@@ -122,6 +118,11 @@ export function MealPlanGrid() {
     fetch("/api/schedule")
       .then((r) => { if (r.ok) return r.json(); return null; })
       .then((data) => { if (data?.pattern) setScheduleData(data); })
+      .catch(() => {});
+
+    fetch("/api/preferences")
+      .then((r) => { if (r.ok) return r.json(); return null; })
+      .then((data) => { if (data?.id) setShowImages(data.showMealImages ?? true); })
       .catch(() => {});
 
     fetch("/api/calendars/events?days=16")
@@ -722,7 +723,11 @@ export function MealPlanGrid() {
               onClick={() => {
                 const next = !showImages;
                 setShowImages(next);
-                localStorage.setItem("mealPlanShowImages", String(next));
+                fetch("/api/preferences", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ showMealImages: next }),
+                }).catch(() => {});
               }}
               className={showImages ? "text-primary" : "text-muted-foreground"}
             >
