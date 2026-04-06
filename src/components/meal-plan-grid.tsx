@@ -65,10 +65,17 @@ export function MealPlanGrid() {
   const [generating, setGenerating] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
 
-  // Builder settings
-  const [startDate, setStartDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  // Builder settings - default to next Monday
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun
+    const daysUntilMon = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+    const nextMon = new Date(now);
+    nextMon.setDate(now.getDate() + daysUntilMon);
+    return nextMon.toISOString().split("T")[0];
+  });
+  const [planDays, setPlanDays] = useState(7);
+  const [shopDay, setShopDay] = useState(0); // Sunday = plan day
   const [ownRecipeRatio, setOwnRecipeRatio] = useState(60);
   const [lunchDays, setLunchDays] = useState<number[]>([0, 6]);
   const [includBreakfast, setIncludeBreakfast] = useState(true);
@@ -344,7 +351,7 @@ export function MealPlanGrid() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           startDate,
-          days: 16,
+          days: planDays,
           householdSize,
           householdSizeWorkDay: workDayHeadcount,
           leftoverWorkMeals: leftoverMode,
@@ -434,15 +441,63 @@ export function MealPlanGrid() {
               </div>
             )}
 
-            {/* Start date */}
-            <div>
-              <label className="text-sm font-medium">Start Date</label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-52 mt-1"
-              />
+            {/* Plan duration + timing */}
+            <div className="rounded-xl border border-border/60 p-4 space-y-4">
+              <p className="text-sm font-semibold">Plan Duration</p>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 7, label: "1 Week" },
+                  { value: 14, label: "2 Weeks" },
+                  { value: 16, label: "16 Days (Full Rotation)" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPlanDays(opt.value)}
+                    className={cn(
+                      "rounded-lg border-2 px-3 py-1.5 text-sm font-medium transition-all",
+                      planDays === opt.value
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border/60 text-muted-foreground"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium">Start date</label>
+                  <p className="text-[11px] text-muted-foreground">First day of the plan</p>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Shopping day</label>
+                  <p className="text-[11px] text-muted-foreground">When you order/pick up groceries</p>
+                  <div className="flex gap-1.5 mt-1">
+                    {DAYS_OF_WEEK.map((day, i) => (
+                      <button
+                        key={day}
+                        onClick={() => setShopDay(i)}
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-lg border-2 text-[10px] font-semibold transition-all",
+                          shopDay === i
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border/60 text-muted-foreground hover:border-primary/30"
+                        )}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* ── Household & Servings ── */}
@@ -623,7 +678,7 @@ export function MealPlanGrid() {
               <RefreshCw
                 className={cn("h-4 w-4 mr-2", generating && "animate-spin")}
               />
-              {generating ? "Generating..." : "Generate 16-Day Plan"}
+              {generating ? "Generating..." : `Generate ${planDays}-Day Plan`}
             </Button>
           </CardContent>
         </Card>
