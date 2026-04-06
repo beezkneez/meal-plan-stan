@@ -24,6 +24,7 @@ import {
   Star,
   Upload,
   Check,
+  Globe,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -77,6 +78,11 @@ export function RecipeList() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
+  const [webResults, setWebResults] = useState<{ title: string; description: string; imageUrl?: string; sourceUrl?: string; prepMinutes: number; cookMinutes: number; totalMinutes: number; servings: number; calories?: number; proteinG?: number; carbsG?: number; fatG?: number; ingredients: { name: string; qty: number | null; unit: string }[]; steps: string[]; tags: string[]; mealTypes: string[]; source: string }[]>([]);
+  const [webSearching, setWebSearching] = useState(false);
+  const [approvedWeb, setApprovedWeb] = useState<Set<number>>(new Set());
+  const [approvingWeb, setApprovingWeb] = useState<number | null>(null);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
@@ -96,6 +102,40 @@ export function RecipeList() {
     loadRecipes();
   }, [search]);
 
+  async function searchWeb() {
+    if (!search.trim()) return;
+    setWebSearching(true);
+    setApprovedWeb(new Set());
+    try {
+      const params = new URLSearchParams({ q: search, mealType: "any", source: "both", offset: "0" });
+      const res = await fetch(`/api/discover?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWebResults(data.recipes ?? []);
+      }
+    } finally {
+      setWebSearching(false);
+    }
+  }
+
+  async function approveWebRecipe(index: number) {
+    const recipe = webResults[index];
+    setApprovingWeb(index);
+    try {
+      const res = await fetch("/api/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(recipe),
+      });
+      if (res.ok) {
+        setApprovedWeb((prev) => new Set([...prev, index]));
+        loadRecipes();
+      }
+    } finally {
+      setApprovingWeb(null);
+    }
+  }
+
   async function deleteRecipe(id: string) {
     await fetch(`/api/recipes/${id}`, { method: "DELETE" });
     setRecipes((prev) => prev.filter((r) => r.id !== id));
@@ -114,16 +154,33 @@ export function RecipeList() {
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search recipes..."
+            placeholder={webSearch ? "Search web for recipes..." : "Search your recipes..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && webSearch && searchWeb()}
             className="pl-9"
           />
         </div>
+        <Button
+          variant={webSearch ? "default" : "outline"}
+          size="sm"
+          onClick={() => {
+            setWebSearch(!webSearch);
+            if (!webSearch) setWebResults([]);
+          }}
+        >
+          <Globe className="h-4 w-4 mr-1.5" />
+          {webSearch ? "Web On" : "Search Web"}
+        </Button>
+        {webSearch && search.trim() && (
+          <Button size="sm" onClick={searchWeb} disabled={webSearching}>
+            {webSearching ? "Searching..." : "Find Recipes"}
+          </Button>
+        )}
         <Dialog open={importOpen} onOpenChange={setImportOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="h-4 w-4 mr-2" />
@@ -148,6 +205,69 @@ export function RecipeList() {
           Bulk Import
         </Button>
       </div>
+
+      {/* Web search results */}
+      {webSearch && webResults.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-primary" />
+            <p className="text-sm font-semibold">
+              Web Results ({webResults.length})
+            </p>
+            <p className="text-xs text-muted-foreground">
+              — tap Approve to add to your recipe book
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {webResults.map((recipe, index) => {
+              const isApproved = approvedWeb.has(index);
+              return (
+                <Card key={index} className={cn(
+                  "overflow-hidden border-border/60",
+                  isApproved && "ring-2 ring-sage border-sage/40"
+                )}>
+                  {recipe.imageUrl && (
+                    <div className="h-32 overflow-hidden">
+                      <img src={recipe.imageUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  )}
+                  <CardContent className="p-3 space-y-2">
+                    <p className="font-display text-sm font-semibold leading-tight">{recipe.title}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {recipe.totalMinutes > 0 && <span>{recipe.totalMinutes}m</span>}
+                      {recipe.proteinG && <span>{recipe.proteinG}g protein</span>}
+                      {recipe.ingredients.length > 0 && <span>{recipe.ingredients.length} ing.</span>}
+                    </div>
+                    {isApproved ? (
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-sage">
+                        <Check className="h-4 w-4" />
+                        Added
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() => approveWebRecipe(index)}
+                        disabled={approvingWeb === index}
+                      >
+                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                        {approvingWeb === index ? "Adding..." : "Approve"}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {webSearch && webSearching && (
+        <div className="flex items-center gap-3 py-8 justify-center text-muted-foreground">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          Searching the web and AI...
+        </div>
+      )}
 
       {/* Bulk import panel */}
       {bulkImportOpen && (
