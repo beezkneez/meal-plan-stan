@@ -22,6 +22,7 @@ import {
   ChefHat,
   Eye,
   Star,
+  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -75,6 +76,10 @@ export function RecipeList() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState("");
 
   async function loadRecipes() {
     const res = await fetch(`/api/recipes?q=${encodeURIComponent(search)}`);
@@ -134,7 +139,68 @@ export function RecipeList() {
             />
           </DialogContent>
         </Dialog>
+        <Button variant="outline" onClick={() => setBulkImportOpen(!bulkImportOpen)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Bulk Import
+        </Button>
       </div>
+
+      {/* Bulk import panel */}
+      {bulkImportOpen && (
+        <Card className="border-border/60 overflow-hidden">
+          <CardContent className="py-5 space-y-3">
+            <div>
+              <p className="text-sm font-semibold">Import from CopyMeThat</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Go to CopyMeThat → Settings → Export Recipes. Open the exported file,
+                select all (Ctrl+A), copy (Ctrl+C), and paste below.
+              </p>
+            </div>
+            <textarea
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring min-h-[120px]"
+              placeholder="Paste your CopyMeThat export here..."
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+            />
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={async () => {
+                  setBulkImporting(true);
+                  setBulkResult("");
+                  try {
+                    const res = await fetch("/api/recipes/import", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ text: bulkText, format: "copymethat" }),
+                    });
+                    const data = await res.json();
+                    if (data.imported > 0) {
+                      setBulkResult(`Imported ${data.imported} recipes!`);
+                      setBulkText("");
+                      loadRecipes();
+                    } else {
+                      setBulkResult(data.error ?? "No recipes found.");
+                    }
+                  } finally {
+                    setBulkImporting(false);
+                  }
+                }}
+                disabled={bulkImporting || !bulkText.trim()}
+              >
+                {bulkImporting ? "Importing..." : "Import Recipes"}
+              </Button>
+              {bulkResult && (
+                <p className={cn(
+                  "text-sm font-medium",
+                  bulkResult.startsWith("Imported") ? "text-sage" : "text-destructive"
+                )}>
+                  {bulkResult}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-3 py-12 justify-center text-muted-foreground">

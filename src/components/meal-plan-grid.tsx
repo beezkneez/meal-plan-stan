@@ -727,7 +727,7 @@ export function MealPlanGrid() {
                   key={dateStr}
                   className="border-border/60 overflow-hidden"
                 >
-                  <CardHeader className="bg-muted/40 py-2.5 px-3 space-y-1.5">
+                  <CardHeader className="bg-muted/40 py-2 px-3">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                         {format(dateObj, "EEE, MMM d")}
@@ -743,19 +743,6 @@ export function MealPlanGrid() {
                         return null;
                       })()}
                     </div>
-                    {/* Calendar events */}
-                    {getEventsForDate(dateStr).map((event, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-1.5 text-[10px] font-medium"
-                      >
-                        <div
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: event.calendarColor || "#888" }}
-                        />
-                        <span className="truncate">{event.summary}</span>
-                      </div>
-                    ))}
                   </CardHeader>
                   <CardContent className="px-3 pb-3 pt-2 space-y-2">
                     {mealTypes.map((type) => {
@@ -913,6 +900,20 @@ export function MealPlanGrid() {
                     >
                       <Plus className="h-3 w-3" />
                     </button>
+                    {/* Calendar events - compact at bottom */}
+                    {getEventsForDate(dateStr).length > 0 && (
+                      <div className="border-t border-border/30 pt-1.5 mt-1 space-y-0.5">
+                        {getEventsForDate(dateStr).map((event, i) => (
+                          <div key={i} className="flex items-center gap-1 text-[9px] text-muted-foreground/70">
+                            <div
+                              className="h-1.5 w-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: (typeof event.calendarColor === "string" ? event.calendarColor : "#888") }}
+                            />
+                            <span className="truncate">{event.summary}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
