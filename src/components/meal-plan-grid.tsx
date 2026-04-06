@@ -662,20 +662,15 @@ export function MealPlanGrid() {
             Shopping List
           </Button>
         </div>
-        <div className="overflow-x-auto -mx-5 px-5 pb-2">
-          <div
-            className="grid gap-3"
-            style={{
-              gridTemplateColumns: `repeat(${Math.min(dates.length, 8)}, minmax(170px, 1fr))`,
-            }}
-          >
+        <div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 lg:grid-cols-8 gap-2">
             {dates.map((dateStr) => {
               const daySlots = slotsByDate.get(dateStr) ?? [];
               const dateObj = new Date(dateStr + "T12:00:00");
               return (
                 <Card
                   key={dateStr}
-                  className="min-w-[170px] border-border/60 overflow-hidden"
+                  className="border-border/60 overflow-hidden"
                 >
                   <CardHeader className="bg-muted/40 py-2.5 px-3 space-y-1.5">
                     <div className="flex items-center justify-between">
