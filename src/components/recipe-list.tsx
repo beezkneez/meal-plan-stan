@@ -79,6 +79,7 @@ export function RecipeList() {
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
+  const [searchType, setSearchType] = useState<"full" | "component">("full");
   const [webResults, setWebResults] = useState<{ title: string; description: string; imageUrl?: string; sourceUrl?: string; prepMinutes: number; cookMinutes: number; totalMinutes: number; servings: number; calories?: number; proteinG?: number; carbsG?: number; fatG?: number; ingredients: { name: string; qty: number | null; unit: string }[]; steps: string[]; tags: string[]; mealTypes: string[]; source: string }[]>([]);
   const [webSearching, setWebSearching] = useState(false);
   const [approvedWeb, setApprovedWeb] = useState<Set<number>>(new Set());
@@ -107,7 +108,8 @@ export function RecipeList() {
     setWebSearching(true);
     setApprovedWeb(new Set());
     try {
-      const params = new URLSearchParams({ q: search, mealType: "any", source: "both", offset: "0" });
+      const q = searchType === "component" ? `${search} recipe only (not a full meal)` : search;
+      const params = new URLSearchParams({ q, mealType: "any", source: "both", offset: "0" });
       const res = await fetch(`/api/discover?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -176,6 +178,32 @@ export function RecipeList() {
           <Globe className="h-4 w-4 mr-1.5" />
           {webSearch ? "Web On" : "Search Web"}
         </Button>
+        {webSearch && (
+          <>
+            <button
+              onClick={() => setSearchType("full")}
+              className={cn(
+                "rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all",
+                searchType === "full"
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-border/60 text-muted-foreground"
+              )}
+            >
+              Full Meals
+            </button>
+            <button
+              onClick={() => setSearchType("component")}
+              className={cn(
+                "rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all",
+                searchType === "component"
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-border/60 text-muted-foreground"
+              )}
+            >
+              Sauces / Sides / Marinades
+            </button>
+          </>
+        )}
         {webSearch && search.trim() && (
           <Button size="sm" onClick={searchWeb} disabled={webSearching}>
             {webSearching ? "Searching..." : "Find Recipes"}
