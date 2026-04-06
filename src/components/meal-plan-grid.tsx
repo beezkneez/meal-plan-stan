@@ -182,6 +182,25 @@ export function MealPlanGrid() {
     }
   }
 
+  async function updateSlotServings(slotId: string, newServings: number) {
+    if (newServings < 1) return;
+    // Optimistic update
+    setPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        slots: prev.slots.map((s) =>
+          s.id === slotId ? { ...s, servings: newServings } : s
+        ),
+      };
+    });
+    await fetch("/api/meal-plan/slot", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slotId, servings: newServings }),
+    });
+  }
+
   function openSlotEditor(slot: MealSlotData) {
     setEditingSlot(slot);
     setCustomText(slot.notes ?? slot.recipe?.title ?? "");
@@ -666,7 +685,22 @@ export function MealPlanGrid() {
                               </p>
                             )}
                             <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                              <span>{slot.servings} srv</span>
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => updateSlotServings(slot.id, slot.servings - 1)}
+                                  className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
+                                >
+                                  -
+                                </button>
+                                <span className="min-w-[2ch] text-center tabular-nums">{slot.servings}</span>
+                                <button
+                                  onClick={() => updateSlotServings(slot.id, slot.servings + 1)}
+                                  className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
+                                >
+                                  +
+                                </button>
+                                <span className="text-[10px]">srv</span>
+                              </div>
                               {slot.recipe?.proteinG && (
                                 <span className="text-terracotta">
                                   {slot.recipe.proteinG}g P
@@ -714,7 +748,26 @@ export function MealPlanGrid() {
                             ))}
                           </div>
                           <div className="flex items-center gap-2 text-muted-foreground mt-1.5">
-                            <span>{typeSlots[0].servings} srv</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  typeSlots.forEach((s) => updateSlotServings(s.id, Math.max(1, s.servings - 1)));
+                                }}
+                                className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
+                              >
+                                -
+                              </button>
+                              <span className="min-w-[2ch] text-center tabular-nums">{typeSlots[0].servings}</span>
+                              <button
+                                onClick={() => {
+                                  typeSlots.forEach((s) => updateSlotServings(s.id, s.servings + 1));
+                                }}
+                                className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
+                              >
+                                +
+                              </button>
+                              <span className="text-[10px]">srv</span>
+                            </div>
                           </div>
                         </div>
                       );

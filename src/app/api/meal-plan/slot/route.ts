@@ -11,7 +11,7 @@ export async function PUT(req: Request) {
   }
 
   const userId = await getHouseholdUserId(session.user.id);
-  const { slotId, recipeId, notes } = await req.json();
+  const { slotId, recipeId, notes, servings } = await req.json();
 
   if (!slotId) {
     return NextResponse.json({ error: "slotId required" }, { status: 400 });
@@ -26,13 +26,15 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const updateData: Record<string, unknown> = {};
+  if (recipeId !== undefined) updateData.recipeId = recipeId ?? null;
+  if (notes !== undefined) updateData.notes = notes ?? null;
+  if (servings !== undefined) updateData.servings = servings;
+  if (recipeId !== undefined || notes !== undefined) updateData.isLeftover = false;
+
   const updated = await prisma.mealSlot.update({
     where: { id: slotId },
-    data: {
-      recipeId: recipeId ?? null,
-      notes: notes ?? null,
-      isLeftover: false,
-    },
+    data: updateData,
     include: { recipe: true },
   });
 
