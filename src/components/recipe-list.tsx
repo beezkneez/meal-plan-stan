@@ -108,8 +108,9 @@ export function RecipeList() {
     setWebSearching(true);
     setApprovedWeb(new Set());
     try {
-      const q = searchType === "component" ? `${search} recipe only (not a full meal)` : search;
-      const params = new URLSearchParams({ q, mealType: "any", source: "both", offset: "0" });
+      const source = searchType === "component" ? "ai" : "both";
+      const q = searchType === "component" ? `${search} — just the sauce/marinade/side recipe by itself, NOT a full dinner` : search;
+      const params = new URLSearchParams({ q, mealType: "any", source, offset: "0" });
       const res = await fetch(`/api/discover?${params}`);
       if (res.ok) {
         const data = await res.json();
