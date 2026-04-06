@@ -103,7 +103,12 @@ export async function GET(req: Request) {
     const scale = slot.servings / slot.recipe.servings;
 
     for (const ing of ingredients) {
-      const key = ing.name.toLowerCase().trim();
+      // Clean up generic unit words from name and unit
+      const junkUnits = /^(units?|count|pieces?|items?|servings?|unit\(s\))$/i;
+      let cleanName = ing.name.replace(/^\s*\d+\s*(units?|unit\(s\)|pieces?|counts?)\s+/i, "").trim();
+      cleanName = cleanName.replace(/\s*,?\s*unit\(s\)\s*/gi, "").trim();
+      const cleanUnit = junkUnits.test(ing.unit?.trim() ?? "") ? "" : (ing.unit ?? "");
+      const key = cleanName.toLowerCase().trim();
       const existing = aggregated.get(key);
       const scaledQty = (ing.qty ?? 1) * scale;
 
@@ -111,9 +116,9 @@ export async function GET(req: Request) {
         existing.qty += scaledQty;
       } else {
         aggregated.set(key, {
-          name: ing.name,
+          name: cleanName,
           qty: scaledQty,
-          unit: ing.unit,
+          unit: cleanUnit,
         });
       }
     }

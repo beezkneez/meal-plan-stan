@@ -374,7 +374,7 @@ export function ShoppingListView() {
                         {item.fromPantry ? (
                           <span className="text-sage">In pantry</span>
                         ) : (
-                          <>{item.qty}{item.unit && !["unit", "units", "count", "piece", "pieces", "item", "items", "serving", "servings"].includes(item.unit.toLowerCase()) ? ` ${item.unit}` : ""}</>
+                          <>{item.qty}{item.unit && !/^(units?|unit\(s\)|counts?|pieces?|items?|servings?)$/i.test(item.unit.trim()) ? ` ${item.unit}` : ""}</>
                         )}
                       </span>
 
