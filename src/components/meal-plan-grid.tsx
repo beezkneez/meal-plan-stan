@@ -97,7 +97,11 @@ export function MealPlanGrid() {
   const [leftoverMode, setLeftoverMode] = useState(true); // make extra dinner for next day lunch
   const [leftoverPortions, setLeftoverPortions] = useState(3); // how many leftover portions
   const [easyWorkNightMeals, setEasyWorkNightMeals] = useState(true);
-  const [showImages, setShowImages] = useState(true);
+  const [showImages, setShowImages] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem("mealPlanShowImages");
+    return saved !== null ? saved === "true" : true;
+  });
 
   // Schedule + events for day tags
   const [scheduleData, setScheduleData] = useState<{ pattern: string; anchorDate: string } | null>(null);
@@ -715,7 +719,11 @@ export function MealPlanGrid() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowImages(!showImages)}
+              onClick={() => {
+                const next = !showImages;
+                setShowImages(next);
+                localStorage.setItem("mealPlanShowImages", String(next));
+              }}
               className={showImages ? "text-primary" : "text-muted-foreground"}
             >
               <Image className="h-4 w-4" />
