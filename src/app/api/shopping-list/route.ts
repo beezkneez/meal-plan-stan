@@ -4,6 +4,40 @@ import { prisma } from "@/lib/prisma";
 import { classifyIngredient, getSectionOrder } from "@/lib/grocery-sections";
 import type { RecipeIngredient } from "@/types";
 
+// POST: deduct pantry items when shopping list is "used"
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { deductions } = await req.json();
+  // deductions: [{ name: string, qty: number }]
+
+  if (!Array.isArray(deductions)) {
+    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+  }
+
+  const pantryItems = await prisma.pantryItem.findMany({
+    where: { userId: session.user.id },
+  });
+
+  for (const d of deductions) {
+    const pantryItem = pantryItems.find(
+      (p) => p.name.toLowerCase().trim() === d.name.toLowerCase().trim()
+    );
+    if (pantryItem) {
+      const newQty = Math.max(0, pantryItem.qtyOnHand - d.qty);
+      await prisma.pantryItem.update({
+        where: { id: pantryItem.id },
+        data: { qtyOnHand: newQty },
+      });
+    }
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -12,6 +46,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const mealPlanId = url.searchParams.get("mealPlanId");
+  const week = url.searchParams.get("week"); // "1", "2", or null for all
 
   // Get the most recent meal plan if no ID specified
   const plan = mealPlanId
@@ -26,7 +61,31 @@ export async function GET(req: Request) {
       });
 
   if (!plan) {
-    return NextResponse.json({ sections: [], message: "No meal plan found" });
+    return NextResponse.json({
+      sections: [],
+      trips: 1,
+      week: null,
+      planDays: 0,
+      message: "No meal plan found",
+    });
+  }
+
+  // Filter slots by week if requested
+  let slots = plan.slots;
+  const planStart = new Date(plan.startDate);
+  const totalDays = Math.ceil(
+    (new Date(plan.endDate).getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24)
+  ) + 1;
+  const midpoint = Math.ceil(totalDays / 2);
+
+  if (week === "1") {
+    const cutoff = new Date(planStart);
+    cutoff.setDate(cutoff.getDate() + midpoint);
+    slots = slots.filter((s) => new Date(s.date) < cutoff);
+  } else if (week === "2") {
+    const cutoff = new Date(planStart);
+    cutoff.setDate(cutoff.getDate() + midpoint);
+    slots = slots.filter((s) => new Date(s.date) >= cutoff);
   }
 
   // Aggregate ingredients from non-leftover slots
@@ -35,7 +94,7 @@ export async function GET(req: Request) {
     { name: string; qty: number; unit: string }
   >();
 
-  for (const slot of plan.slots) {
+  for (const slot of slots) {
     if (slot.isLeftover || !slot.recipe) continue;
 
     const ingredients: RecipeIngredient[] = JSON.parse(
@@ -60,7 +119,7 @@ export async function GET(req: Request) {
     }
   }
 
-  // Subtract pantry
+  // Subtract pantry (only for first trip or full list)
   const pantryItems = await prisma.pantryItem.findMany({
     where: { userId: session.user.id },
   });
@@ -74,24 +133,34 @@ export async function GET(req: Request) {
     qty: number;
     unit: string;
     section: string;
+    fromPantry?: boolean;
+    pantryQty?: number;
+    totalNeeded?: number;
   }> = [];
+
+  const pantryDeductions: Array<{ name: string; qty: number }> = [];
 
   for (const [key, item] of aggregated) {
     const pantryItem = pantryMap.get(key);
     let neededQty = item.qty;
 
-    if (pantryItem) {
+    if (pantryItem && (week !== "2")) {
+      const deducted = Math.min(pantryItem.qtyOnHand, item.qty);
       neededQty = Math.max(0, item.qty - pantryItem.qtyOnHand);
+      if (deducted > 0) {
+        pantryDeductions.push({ name: item.name, qty: deducted });
+      }
     }
 
-    if (neededQty > 0) {
-      groceryItems.push({
-        name: item.name,
-        qty: Math.round(neededQty * 100) / 100,
-        unit: item.unit,
-        section: classifyIngredient(item.name),
-      });
-    }
+    groceryItems.push({
+      name: item.name,
+      qty: Math.round(neededQty * 100) / 100,
+      unit: item.unit,
+      section: classifyIngredient(item.name),
+      fromPantry: neededQty === 0,
+      pantryQty: pantryMap.get(key)?.qtyOnHand ?? 0,
+      totalNeeded: Math.round(item.qty * 100) / 100,
+    });
   }
 
   // Group by section
@@ -105,5 +174,5 @@ export async function GET(req: Request) {
     }))
     .filter((s) => s.items.length > 0);
 
-  return NextResponse.json({ sections });
+  return NextResponse.json({ sections, week, planDays: totalDays, pantryDeductions });
 }
