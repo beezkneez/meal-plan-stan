@@ -25,7 +25,7 @@ import {
 // Using inline modal instead of Dialog to avoid Base UI compatibility issues
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 
 interface MealSlotData {
   id: string;
@@ -88,7 +88,11 @@ export function MealPlanGrid() {
   const [workDayHeadcount, setWorkDayHeadcount] = useState(2); // who eats when you're working
   const [leftoverMode, setLeftoverMode] = useState(true); // make extra dinner for next day lunch
   const [leftoverPortions, setLeftoverPortions] = useState(3); // how many leftover portions
-  const [easyWorkNightMeals, setEasyWorkNightMeals] = useState(true); // pick easy meals on work nights
+  const [easyWorkNightMeals, setEasyWorkNightMeals] = useState(true);
+
+  // Schedule + events for day tags
+  const [scheduleData, setScheduleData] = useState<{ pattern: string; anchorDate: string } | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<{ summary: string; start: string; calendarColor: string; calendarName: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/meal-plan")
@@ -101,7 +105,36 @@ export function MealPlanGrid() {
       .then((r) => r.json())
       .then((data) => setRecipeCount(Array.isArray(data) ? data.length : 0))
       .catch(() => {});
+
+    fetch("/api/schedule")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.pattern) setScheduleData(data);
+      })
+      .catch(() => {});
+
+    fetch("/api/calendars/events?days=16")
+      .then((r) => r.json())
+      .then((data) => setCalendarEvents(data.events ?? []))
+      .catch(() => {});
   }, []);
+
+  function getShiftForDate(dateStr: string): string | null {
+    if (!scheduleData) return null;
+    const pattern = JSON.parse(scheduleData.pattern) as { day: number; shift: string }[];
+    const anchor = new Date(scheduleData.anchorDate);
+    const date = new Date(dateStr + "T12:00:00");
+    const daysDiff = differenceInDays(date, anchor);
+    const index = ((daysDiff % 16) + 16) % 16;
+    return pattern[index]?.shift ?? null;
+  }
+
+  function getEventsForDate(dateStr: string) {
+    return calendarEvents.filter((e) => {
+      const eventDate = (e.start ?? "").split("T")[0];
+      return eventDate === dateStr;
+    });
+  }
 
   function toggleLunchDay(dayIndex: number) {
     setLunchDays((prev) =>
@@ -630,10 +663,35 @@ export function MealPlanGrid() {
                   key={dateStr}
                   className="min-w-[170px] border-border/60 overflow-hidden"
                 >
-                  <CardHeader className="bg-muted/40 py-2.5 px-3">
-                    <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {format(dateObj, "EEE, MMM d")}
-                    </CardTitle>
+                  <CardHeader className="bg-muted/40 py-2.5 px-3 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {format(dateObj, "EEE, MMM d")}
+                      </CardTitle>
+                      {(() => {
+                        const shift = getShiftForDate(dateStr);
+                        if (shift === "DAY") return (
+                          <span className="shift-day rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border">Day</span>
+                        );
+                        if (shift === "NIGHT") return (
+                          <span className="shift-night rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border">Night</span>
+                        );
+                        return null;
+                      })()}
+                    </div>
+                    {/* Calendar events */}
+                    {getEventsForDate(dateStr).map((event, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-1.5 text-[10px] font-medium"
+                      >
+                        <div
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: event.calendarColor || "#888" }}
+                        />
+                        <span className="truncate">{event.summary}</span>
+                      </div>
+                    ))}
                   </CardHeader>
                   <CardContent className="px-3 pb-3 pt-2 space-y-2">
                     {mealTypes.map((type) => {
