@@ -92,17 +92,17 @@ export function MealPlanGrid() {
 
   // Schedule + events for day tags
   const [scheduleData, setScheduleData] = useState<{ pattern: string; anchorDate: string } | null>(null);
-  const [calendarEvents, setCalendarEvents] = useState<{ summary: string; start: string; calendarColor: string; calendarName: string }[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<{ summary: string; start: unknown; calendarColor: string; calendarName: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/meal-plan")
-      .then((r) => r.json())
-      .then((data) => setPlan(data))
+      .then((r) => { if (r.ok) return r.json(); return null; })
+      .then((data) => { if (data?.id) setPlan(data); })
       .catch(() => {})
       .finally(() => setLoading(false));
 
     fetch("/api/recipes")
-      .then((r) => r.json())
+      .then((r) => { if (r.ok) return r.json(); return []; })
       .then((data) => setRecipeCount(Array.isArray(data) ? data.length : 0))
       .catch(() => {});
 
@@ -136,8 +136,17 @@ export function MealPlanGrid() {
 
   function getEventsForDate(dateStr: string) {
     return calendarEvents.filter((e) => {
-      const eventDate = (e.start ?? "").split("T")[0];
-      return eventDate === dateStr;
+      try {
+        const startVal = e.start;
+        const startStr = typeof startVal === "string"
+          ? startVal
+          : typeof startVal === "object" && startVal !== null
+            ? (startVal as Record<string, string>).dateTime ?? (startVal as Record<string, string>).date ?? ""
+            : "";
+        return startStr.split("T")[0] === dateStr;
+      } catch {
+        return false;
+      }
     });
   }
 
