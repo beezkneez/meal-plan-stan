@@ -61,9 +61,20 @@ model User {
   pantryItems    PantryItem[]
 
   // Household sharing
-  householdId    String?  // points to the owner's user ID
-  householdMembers User[] @relation("HouseholdMembers")
-  householdOwner   User?  @relation("HouseholdMembers", fields: [householdId], references: [id])
+  householdId    String?
+  householdMembers User[]           @relation("HouseholdMembers")
+  householdOwner   User?            @relation("HouseholdMembers", fields: [householdId], references: [id])
+  inviteTokens     HouseholdInvite[]
+}
+
+model HouseholdInvite {
+  id        String   @id @default(cuid())
+  token     String   @unique @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
 }
 
 // ── User Preferences ──

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, Plus, Trash2, Crown } from "lucide-react";
+import { Users, Plus, Trash2, Crown, Link2, Copy, Check } from "lucide-react";
 
 interface Member {
   id: string;
@@ -27,6 +27,9 @@ export function HouseholdManager() {
   const [inviting, setInviting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [inviteLink, setInviteLink] = useState("");
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch("/api/household")
@@ -150,28 +153,81 @@ export function HouseholdManager() {
 
         {/* Invite */}
         {data.isOwner && (
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Partner's Gmail address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && email && invite()}
-                type="email"
-              />
-              <Button
-                onClick={invite}
-                disabled={inviting || !email}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                {inviting ? "Adding..." : "Add"}
-              </Button>
+          <div className="space-y-4">
+            {/* Invite link */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Invite via link</p>
+              {inviteLink ? (
+                <div className="flex gap-2">
+                  <Input value={inviteLink} readOnly className="text-xs" />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteLink);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-sage" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setGeneratingLink(true);
+                    try {
+                      const res = await fetch("/api/household/invite", {
+                        method: "POST",
+                      });
+                      const { token } = await res.json();
+                      setInviteLink(
+                        `${window.location.origin}/join/${token}`
+                      );
+                    } finally {
+                      setGeneratingLink(false);
+                    }
+                  }}
+                  disabled={generatingLink}
+                >
+                  <Link2 className="h-4 w-4 mr-2" />
+                  {generatingLink ? "Generating..." : "Get Invite Link"}
+                </Button>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Send this link to your family member. They sign in with Google
+                and tap &ldquo;Join&rdquo;. Link expires in 7 days.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              They need to sign into the app once first, then you can add them
-              here. Everything will be shared — recipes, meal plans, pantry, and
-              shopping lists.
-            </p>
+
+            {/* Or add by email */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Or add by email</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Partner's Gmail address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && email && invite()}
+                  type="email"
+                />
+                <Button
+                  onClick={invite}
+                  disabled={inviting || !email}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  {inviting ? "Adding..." : "Add"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                They need to sign into the app once first.
+              </p>
+            </div>
+
             {error && (
               <p className="text-sm text-destructive">{error}</p>
             )}
