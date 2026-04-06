@@ -19,6 +19,8 @@ import {
   Pencil,
   Check,
   Search,
+  X,
+  Plus,
 } from "lucide-react";
 // Using inline modal instead of Dialog to avoid Base UI compatibility issues
 import Link from "next/link";
@@ -107,6 +109,77 @@ export function MealPlanGrid() {
         ? prev.filter((d) => d !== dayIndex)
         : [...prev, dayIndex]
     );
+  }
+
+  // Delete/skip slot
+  const [deleteSlot, setDeleteSlot] = useState<MealSlotData | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  // Add manual entry
+  const [addingToDate, setAddingToDate] = useState<string | null>(null);
+  const [addMealType, setAddMealType] = useState("dinner");
+  const [addNotes, setAddNotes] = useState("");
+  const [addingSaving, setAddingSaving] = useState(false);
+
+  async function handleDeleteSlot() {
+    if (!deleteSlot) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/meal-plan/slot", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotId: deleteSlot.id, reason: deleteReason }),
+      });
+      if (res.ok) {
+        const { removedSlotIds } = await res.json();
+        setPlan((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            slots: prev.slots
+              .filter((s) => !removedSlotIds.includes(s.id) || s.id === deleteSlot.id)
+              .map((s) =>
+                s.id === deleteSlot.id
+                  ? { ...s, recipeId: null, recipe: null, notes: deleteReason ? `Skipped: ${deleteReason}` : "Skipped", servings: 0, isLeftover: false }
+                  : s
+              ),
+          };
+        });
+        setDeleteSlot(null);
+        setDeleteReason("");
+      }
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleAddSlot() {
+    if (!plan || !addingToDate) return;
+    setAddingSaving(true);
+    try {
+      const res = await fetch("/api/meal-plan/slot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mealPlanId: plan.id,
+          date: addingToDate,
+          mealType: addMealType,
+          notes: addNotes,
+        }),
+      });
+      if (res.ok) {
+        const newSlot = await res.json();
+        setPlan((prev) => {
+          if (!prev) return prev;
+          return { ...prev, slots: [...prev.slots, newSlot] };
+        });
+        setAddingToDate(null);
+        setAddNotes("");
+      }
+    } finally {
+      setAddingSaving(false);
+    }
   }
 
   function openSlotEditor(slot: MealSlotData) {
@@ -570,7 +643,15 @@ export function MealPlanGrid() {
                               {slot.isLeftover && (
                                 <LinkIcon className="h-3 w-3 text-muted-foreground/50" />
                               )}
-                              <Pencil className="h-2.5 w-2.5 text-muted-foreground/0 group-hover/slot:text-muted-foreground/40 transition-colors ml-auto" />
+                              <span className="ml-auto flex gap-0.5 opacity-0 group-hover/slot:opacity-100 transition-opacity">
+                                <Pencil className="h-2.5 w-2.5 text-muted-foreground/40" />
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setDeleteSlot(slot); }}
+                                  className="hover:text-destructive transition-colors"
+                                >
+                                  <X className="h-3 w-3 text-muted-foreground/40 hover:text-destructive" />
+                                </button>
+                              </span>
                             </div>
                             {slot.recipe ? (
                               <Link
@@ -638,6 +719,17 @@ export function MealPlanGrid() {
                         </div>
                       );
                     })}
+                    {/* Add slot button */}
+                    <button
+                      onClick={() => {
+                        setAddingToDate(dateStr);
+                        setAddMealType("dinner");
+                        setAddNotes("");
+                      }}
+                      className="flex items-center justify-center gap-1 w-full rounded-lg border border-dashed border-border/40 py-1.5 text-[10px] text-muted-foreground/40 hover:text-muted-foreground hover:border-primary/30 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
                   </CardContent>
                 </Card>
               );
@@ -749,6 +841,94 @@ export function MealPlanGrid() {
               </div>
             </div>
           )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete/skip slot modal */}
+      {deleteSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-xs" onClick={() => setDeleteSlot(null)} />
+          <div className="relative z-10 w-full max-w-sm mx-4 rounded-xl bg-popover p-5 shadow-xl ring-1 ring-foreground/10 space-y-4">
+            <h3 className="font-display text-lg font-semibold">
+              Skip {deleteSlot.mealType}?
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {deleteSlot.recipe?.title ?? deleteSlot.notes ?? "This meal"} on{" "}
+              {format(new Date(deleteSlot.date.split("T")[0] + "T12:00:00"), "EEE, MMM d")}
+            </p>
+            {deleteSlot.mealType === "dinner" && (
+              <p className="text-xs text-amber-deep">
+                This will also remove tomorrow&apos;s leftover lunch if it depends on this dinner.
+              </p>
+            )}
+            <Input
+              placeholder="Reason (e.g. Going to a friend's place)"
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                onClick={handleDeleteSlot}
+                disabled={deleting}
+                className="flex-1"
+              >
+                {deleting ? "Removing..." : "Skip This Meal"}
+              </Button>
+              <Button variant="outline" onClick={() => setDeleteSlot(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add manual entry modal */}
+      {addingToDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-xs" onClick={() => setAddingToDate(null)} />
+          <div className="relative z-10 w-full max-w-sm mx-4 rounded-xl bg-popover p-5 shadow-xl ring-1 ring-foreground/10 space-y-4">
+            <h3 className="font-display text-lg font-semibold">
+              Add to {format(new Date(addingToDate.split("T")[0] + "T12:00:00"), "EEE, MMM d")}
+            </h3>
+            <div className="flex gap-2">
+              {["breakfast", "lunch", "dinner", "snack"].map((mt) => (
+                <button
+                  key={mt}
+                  onClick={() => setAddMealType(mt)}
+                  className={cn(
+                    "rounded-lg border-2 px-3 py-1.5 text-xs font-medium capitalize transition-all",
+                    addMealType === mt
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border/60 text-muted-foreground"
+                  )}
+                >
+                  {mt}
+                </button>
+              ))}
+            </div>
+            <Input
+              placeholder="e.g. Going to McDonald's, Date night out"
+              value={addNotes}
+              onChange={(e) => setAddNotes(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addNotes.trim() && handleAddSlot()}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={handleAddSlot}
+                disabled={addingSaving || !addNotes.trim()}
+                className="flex-1"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {addingSaving ? "Adding..." : "Add"}
+              </Button>
+              <Button variant="outline" onClick={() => setAddingToDate(null)}>
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       )}
