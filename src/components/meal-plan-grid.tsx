@@ -21,6 +21,7 @@ import {
   Search,
   X,
   Plus,
+  Image,
 } from "lucide-react";
 // Using inline modal instead of Dialog to avoid Base UI compatibility issues
 import Link from "next/link";
@@ -96,6 +97,7 @@ export function MealPlanGrid() {
   const [leftoverMode, setLeftoverMode] = useState(true); // make extra dinner for next day lunch
   const [leftoverPortions, setLeftoverPortions] = useState(3); // how many leftover portions
   const [easyWorkNightMeals, setEasyWorkNightMeals] = useState(true);
+  const [showImages, setShowImages] = useState(true);
 
   // Schedule + events for day tags
   const [scheduleData, setScheduleData] = useState<{ pattern: string; anchorDate: string } | null>(null);
@@ -709,13 +711,23 @@ export function MealPlanGrid() {
             {format(new Date(plan.startDate), "MMM d")} &ndash;{" "}
             {format(new Date(plan.endDate), "MMM d")}
           </p>
-          <Button
-            variant="outline"
-            onClick={() => router.push("/shopping-list")}
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Shopping List
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowImages(!showImages)}
+              className={showImages ? "text-primary" : "text-muted-foreground"}
+            >
+              <Image className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/shopping-list")}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Shopping List
+            </Button>
+          </div>
         </div>
         <div>
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 lg:grid-cols-8 gap-2">
@@ -782,12 +794,23 @@ export function MealPlanGrid() {
                               </span>
                             </div>
                             {slot.recipe ? (
-                              <Link
-                                href={`/recipes/${slot.recipe.id}`}
-                                className="font-medium text-[13px] truncate block hover:text-primary transition-colors"
-                              >
-                                {slot.recipe.title}
-                              </Link>
+                              <>
+                                {showImages && slot.recipe.imageUrl && (
+                                  <Link href={`/recipes/${slot.recipe.id}`}>
+                                    <img
+                                      src={slot.recipe.imageUrl}
+                                      alt=""
+                                      className="w-full h-16 object-cover rounded-md mb-1.5 -mt-0.5"
+                                    />
+                                  </Link>
+                                )}
+                                <Link
+                                  href={`/recipes/${slot.recipe.id}`}
+                                  className="font-medium text-[13px] truncate block hover:text-primary transition-colors"
+                                >
+                                  {slot.recipe.title}
+                                </Link>
+                              </>
                             ) : (
                               <p className="font-medium text-[13px] truncate">
                                 {slot.notes ?? "Unassigned"}
