@@ -4,7 +4,14 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShoppingCart, Check, RefreshCw } from "lucide-react";
+import {
+  ShoppingCart,
+  Check,
+  RefreshCw,
+  ExternalLink,
+  Package,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface GroceryItem {
@@ -36,6 +43,8 @@ export function ShoppingListView() {
   const [pantryDeductions, setPantryDeductions] = useState<{ name: string; qty: number }[]>([]);
   const [deducting, setDeducting] = useState(false);
   const [deducted, setDeducted] = useState(false);
+  const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+  const [addingToPantry, setAddingToPantry] = useState<string | null>(null);
 
   useEffect(() => {
     loadList();
@@ -72,6 +81,37 @@ export function ShoppingListView() {
       else next.add(key);
       return next;
     });
+  }
+
+  function removeItem(key: string) {
+    setRemovedItems((prev) => new Set([...prev, key]));
+  }
+
+  async function addToPantry(item: GroceryItem, sectionName: string) {
+    const key = `${sectionName}:${item.name}`;
+    setAddingToPantry(key);
+    try {
+      await fetch("/api/pantry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: item.name,
+          category: "other",
+          unit: item.unit || "count",
+          qtyOnHand: item.qty || 1,
+          qtyMinimum: 0,
+        }),
+      });
+      // Mark as checked and remove from list
+      setChecked((prev) => new Set([...prev, key]));
+      setRemovedItems((prev) => new Set([...prev, key]));
+    } finally {
+      setAddingToPantry(null);
+    }
+  }
+
+  function walmartSearchUrl(itemName: string): string {
+    return `https://www.walmart.ca/search?q=${encodeURIComponent(itemName)}`;
   }
 
   function selectTrips(count: 1 | 2) {
@@ -281,41 +321,51 @@ export function ShoppingListView() {
               <div className="divide-y divide-border/40">
                 {section.items.map((item) => {
                   const key = `${section.name}:${item.name}`;
+                  if (removedItems.has(key)) return null;
                   const isChecked = checked.has(key);
                   return (
-                    <button
+                    <div
                       key={key}
-                      onClick={() => toggleItem(key)}
                       className={cn(
-                        "flex items-center gap-3 w-full px-4 py-3 text-sm transition-all duration-200 text-left",
+                        "flex items-center gap-2 px-4 py-2.5 text-sm transition-all duration-200",
                         isChecked
                           ? "text-muted-foreground/50 bg-muted/20"
-                          : "hover:bg-accent/30"
+                          : "hover:bg-accent/10"
                       )}
                     >
-                      <div
-                        className={cn(
-                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all duration-200",
-                          isChecked
-                            ? "bg-primary border-primary scale-95"
-                            : "border-border hover:border-primary/50"
-                        )}
+                      {/* Checkbox */}
+                      <button
+                        onClick={() => toggleItem(key)}
+                        className="shrink-0"
                       >
-                        {isChecked && (
-                          <Check className="h-3 w-3 text-primary-foreground" />
-                        )}
-                      </div>
+                        <div
+                          className={cn(
+                            "flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200",
+                            isChecked
+                              ? "bg-primary border-primary scale-95"
+                              : "border-border hover:border-primary/50"
+                          )}
+                        >
+                          {isChecked && (
+                            <Check className="h-3 w-3 text-primary-foreground" />
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Item name */}
                       <span
                         className={cn(
-                          "flex-1 transition-all duration-200",
+                          "flex-1 min-w-0 truncate transition-all duration-200",
                           isChecked && "line-through"
                         )}
                       >
                         {item.name}
                       </span>
+
+                      {/* Qty */}
                       <span
                         className={cn(
-                          "text-xs font-medium tabular-nums",
+                          "text-xs font-medium tabular-nums shrink-0",
                           isChecked
                             ? "text-muted-foreground/30"
                             : "text-muted-foreground"
@@ -327,7 +377,51 @@ export function ShoppingListView() {
                           <>{item.qty} {item.unit}</>
                         )}
                       </span>
-                    </button>
+
+                      {/* Action buttons */}
+                      <div className="flex shrink-0 gap-0.5 ml-1">
+                        {/* Walmart search */}
+                        {!item.fromPantry && (
+                          <a
+                            href={walmartSearchUrl(item.name)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 hover:text-primary hover:bg-accent/30 transition-colors"
+                            title="Search on Walmart"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+
+                        {/* I have this → add to pantry */}
+                        {!item.fromPantry && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToPantry(item, section.name);
+                            }}
+                            disabled={addingToPantry === key}
+                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 hover:text-sage hover:bg-sage/10 transition-colors"
+                            title="I have this — add to pantry"
+                          >
+                            <Package className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+
+                        {/* Remove */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeItem(key);
+                          }}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Remove from list"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
