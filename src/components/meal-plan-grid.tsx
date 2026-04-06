@@ -743,26 +743,34 @@ export function MealPlanGrid() {
                               </p>
                             )}
                             <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  onClick={() => updateSlotServings(slot.id, slot.servings - 1)}
-                                  className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
-                                >
-                                  -
-                                </button>
-                                <span className="min-w-[2ch] text-center tabular-nums">{slot.servings}</span>
-                                <button
-                                  onClick={() => updateSlotServings(slot.id, slot.servings + 1)}
-                                  className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
-                                >
-                                  +
-                                </button>
-                                <span className="text-[10px]">srv</span>
-                              </div>
-                              {slot.recipe?.proteinG && (
-                                <span className="text-terracotta">
-                                  {slot.recipe.proteinG}g P
+                              {slot.isLeftover ? (
+                                <span className="text-[10px] italic">
+                                  {slot.servings} srv (from last night)
                                 </span>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      onClick={() => updateSlotServings(slot.id, slot.servings - 1)}
+                                      className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="min-w-[2ch] text-center tabular-nums">{slot.servings}</span>
+                                    <button
+                                      onClick={() => updateSlotServings(slot.id, slot.servings + 1)}
+                                      className="flex h-4 w-4 items-center justify-center rounded border border-border/60 text-[8px] hover:bg-accent transition-colors"
+                                    >
+                                      +
+                                    </button>
+                                    <span className="text-[10px]">srv</span>
+                                  </div>
+                                  {slot.recipe?.proteinG && (
+                                    <span className="text-terracotta">
+                                      {slot.recipe.proteinG}g P
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
