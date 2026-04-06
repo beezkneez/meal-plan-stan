@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdUserId } from "@/lib/household";
 
 // PUT: update a single meal slot (manual override)
 export async function PUT(req: Request) {
@@ -9,6 +10,7 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
   const { slotId, recipeId, notes } = await req.json();
 
   if (!slotId) {
@@ -20,7 +22,7 @@ export async function PUT(req: Request) {
     include: { mealPlan: true },
   });
 
-  if (!slot || slot.mealPlan.userId !== session.user.id) {
+  if (!slot || slot.mealPlan.userId !== userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -44,6 +46,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
   const { slotId, reason } = await req.json();
 
   if (!slotId) {
@@ -55,7 +58,7 @@ export async function DELETE(req: Request) {
     include: { mealPlan: true },
   });
 
-  if (!slot || slot.mealPlan.userId !== session.user.id) {
+  if (!slot || slot.mealPlan.userId !== userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -128,7 +131,8 @@ export async function POST(req: Request) {
     where: { id: mealPlanId },
   });
 
-  if (!plan || plan.userId !== session.user.id) {
+  const userId = await getHouseholdUserId(session.user.id);
+  if (!plan || plan.userId !== userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

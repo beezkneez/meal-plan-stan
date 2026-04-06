@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyIngredient, getSectionOrder } from "@/lib/grocery-sections";
+import { getHouseholdUserId } from "@/lib/household";
 import type { RecipeIngredient } from "@/types";
 
 // POST: deduct pantry items when shopping list is "used"
@@ -11,6 +12,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const { deductions } = await req.json();
   // deductions: [{ name: string, qty: number }]
 
@@ -19,7 +22,7 @@ export async function POST(req: Request) {
   }
 
   const pantryItems = await prisma.pantryItem.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   for (const d of deductions) {
@@ -44,6 +47,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const url = new URL(req.url);
   const mealPlanId = url.searchParams.get("mealPlanId");
   const week = url.searchParams.get("week"); // "1", "2", or null for all
@@ -55,7 +60,7 @@ export async function GET(req: Request) {
         include: { slots: { include: { recipe: true } } },
       })
     : await prisma.mealPlan.findFirst({
-        where: { userId: session.user.id },
+        where: { userId },
         orderBy: { createdAt: "desc" },
         include: { slots: { include: { recipe: true } } },
       });
@@ -126,7 +131,7 @@ export async function GET(req: Request) {
 
   // Subtract pantry (only for first trip or full list)
   const pantryItems = await prisma.pantryItem.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   const pantryMap = new Map(

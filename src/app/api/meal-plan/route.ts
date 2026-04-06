@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdUserId } from "@/lib/household";
 import { generateMealPlan } from "@/lib/planner";
 import {
   getGoogleAccessToken,
@@ -14,8 +15,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const plans = await prisma.mealPlan.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     include: { slots: { include: { recipe: true } } },
     orderBy: { startDate: "desc" },
     take: 1,
@@ -29,6 +32,8 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userId = await getHouseholdUserId(session.user.id);
 
   const body = await req.json();
   const {
@@ -45,7 +50,7 @@ export async function POST(req: Request) {
 
   // Get user's schedule
   const schedule = await prisma.schedule.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   if (!schedule) {
@@ -57,7 +62,7 @@ export async function POST(req: Request) {
 
   // Get user's recipes with mealTypes
   const dbRecipes = await prisma.recipe.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   const recipes = dbRecipes.map((r) => ({
@@ -77,7 +82,7 @@ export async function POST(req: Request) {
 
   // Get user preferences for protein target
   const prefs = await prisma.userPreferences.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   const pattern: ScheduleDay[] = JSON.parse(schedule.pattern);
@@ -88,7 +93,7 @@ export async function POST(req: Request) {
     const accessToken = await getGoogleAccessToken(session.user.id);
     if (accessToken) {
       const syncedCals = await prisma.calendarSync.findMany({
-        where: { userId: session.user.id, enabled: true },
+        where: { userId, enabled: true },
       });
 
       const planStart = new Date(startDate);
@@ -137,7 +142,7 @@ export async function POST(req: Request) {
 
   // Delete old plans before creating new one
   await prisma.mealPlan.deleteMany({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   const endDate = new Date(startDate);
@@ -145,7 +150,7 @@ export async function POST(req: Request) {
 
   const mealPlan = await prisma.mealPlan.create({
     data: {
-      userId: session.user.id,
+      userId,
       startDate: new Date(startDate),
       endDate,
       slots: {

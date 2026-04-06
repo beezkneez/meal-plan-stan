@@ -59,6 +59,11 @@ model User {
   recipes        Recipe[]
   mealPlans      MealPlan[]
   pantryItems    PantryItem[]
+
+  // Household sharing
+  householdId    String?  // points to the owner's user ID
+  householdMembers User[] @relation("HouseholdMembers")
+  householdOwner   User?  @relation("HouseholdMembers", fields: [householdId], references: [id])
 }
 
 // ── User Preferences ──

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdUserId } from "@/lib/household";
 import {
   searchSpoonacular,
   generateAIRecipes,
@@ -12,6 +13,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const { searchParams } = new URL(req.url);
   const query = searchParams.get("q") ?? "family dinner";
   const mealType = searchParams.get("mealType") ?? "dinner";
@@ -20,7 +23,7 @@ export async function GET(req: Request) {
 
   // Load user preferences for AI generation
   const prefs = await prisma.userPreferences.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   const preferences = prefs
@@ -61,13 +64,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const body = await req.json();
 
   const totalMinutes = (body.prepMinutes ?? 0) + (body.cookMinutes ?? 0);
 
   const recipe = await prisma.recipe.create({
     data: {
-      userId: session.user.id,
+      userId,
       title: body.title,
       sourceUrl: body.sourceUrl,
       imageUrl: body.imageUrl,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdUserId } from "@/lib/household";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -8,13 +9,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const url = new URL(req.url);
   const q = url.searchParams.get("q") ?? "";
   const tag = url.searchParams.get("tag");
 
   let recipes = await prisma.recipe.findMany({
     where: {
-      userId: session.user.id,
+      userId,
       ...(q ? { title: { contains: q } } : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -36,6 +39,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const body = await req.json();
 
   const totalMinutes = (body.prepMinutes ?? 0) + (body.cookMinutes ?? 0);
@@ -48,7 +53,7 @@ export async function POST(req: Request) {
 
   const recipe = await prisma.recipe.create({
     data: {
-      userId: session.user.id,
+      userId,
       title: body.title,
       sourceUrl: body.sourceUrl,
       imageUrl: body.imageUrl,

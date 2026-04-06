@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdUserId } from "@/lib/household";
 
 export async function GET() {
   const session = await auth();
@@ -8,8 +9,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const items = await prisma.pantryItem.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { category: "asc" },
   });
 
@@ -22,11 +25,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const body = await req.json();
 
   const item = await prisma.pantryItem.create({
     data: {
-      userId: session.user.id,
+      userId,
       name: body.name,
       category: body.category ?? "other",
       unit: body.unit ?? "count",
@@ -44,6 +49,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const body = await req.json();
   const { id, ...data } = body;
 
@@ -60,6 +67,8 @@ export async function DELETE(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userId = await getHouseholdUserId(session.user.id);
 
   const url = new URL(req.url);
   const id = url.searchParams.get("id");

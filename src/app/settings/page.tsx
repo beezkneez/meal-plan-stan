@@ -1,6 +1,7 @@
 "use client";
 
 import { PreferencesForm } from "@/components/preferences-form";
+import { HouseholdManager } from "@/components/household-manager";
 
 export default function SettingsPage() {
   return (
@@ -13,6 +14,7 @@ export default function SettingsPage() {
           Set your eating style, dislikes, and meal preferences.
         </p>
       </div>
+      <HouseholdManager />
       <PreferencesForm />
     </div>
   );

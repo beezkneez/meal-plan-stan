@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getHouseholdUserId } from "@/lib/household";
 
 export async function GET(
   _req: Request,
@@ -11,9 +12,11 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = await getHouseholdUserId(session.user.id);
+
   const { id } = await params;
   const recipe = await prisma.recipe.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
   });
 
   if (!recipe) {
@@ -31,6 +34,8 @@ export async function PUT(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userId = await getHouseholdUserId(session.user.id);
 
   const { id } = await params;
   const body = await req.json();
@@ -74,6 +79,8 @@ export async function DELETE(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userId = await getHouseholdUserId(session.user.id);
 
   const { id } = await params;
   await prisma.recipe.delete({ where: { id } });
