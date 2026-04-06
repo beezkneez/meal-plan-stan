@@ -10,7 +10,7 @@ export default function MealPlanPage() {
           Meal Plan
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Your 16-day meal plan, built around your schedule.
+          Your meal plan, built around your schedule.
         </p>
       </div>
       <MealPlanGrid />

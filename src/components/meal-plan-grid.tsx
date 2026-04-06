@@ -729,21 +729,22 @@ export function MealPlanGrid() {
                   body: JSON.stringify({ showMealImages: next }),
                 }).catch(() => {});
               }}
-              className={showImages ? "text-primary" : "text-muted-foreground"}
             >
-              <Image className="h-4 w-4" />
+              <Image className="h-4 w-4 mr-1.5" />
+              {showImages ? "Hide Photos" : "Show Photos"}
             </Button>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => router.push("/shopping-list")}
             >
-              <ShoppingCart className="h-4 w-4 mr-2" />
+              <ShoppingCart className="h-4 w-4 mr-1.5" />
               Shopping List
             </Button>
           </div>
         </div>
         <div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 lg:grid-cols-8 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {dates.map((dateStr) => {
               const daySlots = slotsByDate.get(dateStr) ?? [];
               const dateObj = new Date(dateStr + "T12:00:00");
@@ -819,13 +820,13 @@ export function MealPlanGrid() {
                                 )}
                                 <Link
                                   href={`/recipes/${slot.recipe.id}`}
-                                  className="font-medium text-[13px] truncate block hover:text-primary transition-colors"
+                                  className="font-medium text-[12px] leading-tight block hover:text-primary transition-colors"
                                 >
                                   {slot.recipe.title}
                                 </Link>
                               </>
                             ) : (
-                              <p className="font-medium text-[13px] truncate">
+                              <p className="font-medium text-[12px] leading-tight">
                                 {slot.notes ?? "Unassigned"}
                               </p>
                             )}
@@ -888,12 +889,12 @@ export function MealPlanGrid() {
                                 {slot.recipe ? (
                                   <Link
                                     href={`/recipes/${slot.recipe.id}`}
-                                    className="font-medium text-[12px] truncate flex-1 hover:text-primary transition-colors"
+                                    className="font-medium text-[11px] leading-tight flex-1 hover:text-primary transition-colors"
                                   >
                                     {slot.recipe.title}
                                   </Link>
                                 ) : (
-                                  <p className="font-medium text-[12px] truncate flex-1">
+                                  <p className="font-medium text-[11px] leading-tight flex-1">
                                     {slot.notes ?? "Unassigned"}
                                   </p>
                                 )}
