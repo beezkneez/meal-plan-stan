@@ -59,6 +59,10 @@ const RECIPE_ROLES = [
   { value: "veggie", label: "Veggie" },
   { value: "soup", label: "Soup" },
   { value: "salad", label: "Salad" },
+  { value: "sauce", label: "Sauce" },
+  { value: "marinade", label: "Marinade" },
+  { value: "dessert", label: "Dessert" },
+  { value: "drink", label: "Drink" },
 ];
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"];
@@ -70,6 +74,10 @@ const ROLE_COLORS: Record<string, string> = {
   veggie: "bg-sage/15 text-sage border-sage/25",
   soup: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
   salad: "bg-sage/15 text-sage border-sage/25",
+  sauce: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  marinade: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  dessert: "bg-terracotta/15 text-terracotta border-terracotta/25",
+  drink: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
 };
 
 const MEAL_TYPE_COLORS: Record<string, string> = {

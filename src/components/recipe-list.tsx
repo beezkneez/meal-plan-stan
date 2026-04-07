@@ -40,12 +40,16 @@ const MEAL_TYPE_COLORS: Record<string, string> = {
 };
 
 const RECIPE_ROLES = [
-  { value: "complete", label: "Complete Meal", desc: "Full meal, no sides needed" },
-  { value: "main", label: "Main", desc: "Protein / main dish — needs sides" },
-  { value: "side", label: "Side", desc: "Starch or grain side dish" },
-  { value: "veggie", label: "Veggie", desc: "Vegetable side dish" },
-  { value: "soup", label: "Soup", desc: "Soup or stew" },
-  { value: "salad", label: "Salad", desc: "Salad or slaw" },
+  { value: "complete", label: "Complete Meal" },
+  { value: "main", label: "Main" },
+  { value: "side", label: "Side" },
+  { value: "veggie", label: "Veggie" },
+  { value: "soup", label: "Soup" },
+  { value: "salad", label: "Salad" },
+  { value: "sauce", label: "Sauce / Dressing" },
+  { value: "marinade", label: "Marinade / Rub" },
+  { value: "dessert", label: "Dessert" },
+  { value: "drink", label: "Drink" },
 ] as const;
 
 const ROLE_COLORS: Record<string, string> = {
@@ -55,6 +59,10 @@ const ROLE_COLORS: Record<string, string> = {
   veggie: "bg-sage/15 text-sage border-sage/25",
   soup: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
   salad: "bg-sage/15 text-sage border-sage/25",
+  sauce: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  marinade: "bg-amber-warm/15 text-amber-deep border-amber-warm/25",
+  dessert: "bg-terracotta/15 text-terracotta border-terracotta/25",
+  drink: "bg-indigo-shift/15 text-indigo-shift border-indigo-shift/25",
 };
 
 interface Recipe {
@@ -952,6 +960,7 @@ function CreateRecipeForm({ onSaved }: { onSaved: () => void }) {
   const [selectedRole, setSelectedRole] = useState("complete");
   const [selectedMealTypes, setSelectedMealTypes] = useState<string[]>(["dinner"]);
   const [imageUrl, setImageUrl] = useState("");
+  const [tagsText, setTagsText] = useState("");
 
   async function handleSave() {
     if (!title.trim()) return;
@@ -996,7 +1005,7 @@ function CreateRecipeForm({ onSaved }: { onSaved: () => void }) {
           fatG: fatG || undefined,
           ingredients,
           steps,
-          tags: [],
+          tags: tagsText.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean),
           mealTypes: selectedMealTypes,
           role: selectedRole,
           imageUrl: imageUrl || undefined,
@@ -1135,6 +1144,17 @@ function CreateRecipeForm({ onSaved }: { onSaved: () => void }) {
             value={stepsText}
             onChange={(e) => setStepsText(e.target.value)}
             placeholder={"Mix all ingredients in a bowl.\nAdd chicken and coat evenly.\nMarinate for at least 2 hours.\nGrill or bake as desired."}
+          />
+        </div>
+
+        {/* Tags */}
+        <div>
+          <label className="text-sm font-medium">Tags</label>
+          <p className="text-xs text-muted-foreground mb-1">Comma separated. e.g. "greek, easy, bbq, kid-friendly"</p>
+          <Input
+            value={tagsText}
+            onChange={(e) => setTagsText(e.target.value)}
+            placeholder="greek, easy, bbq, kid-friendly"
           />
         </div>
 
