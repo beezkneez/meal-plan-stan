@@ -84,6 +84,7 @@ export function RecipeList() {
   const [webSearching, setWebSearching] = useState(false);
   const [approvedWeb, setApprovedWeb] = useState<Set<number>>(new Set());
   const [approvingWeb, setApprovingWeb] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
@@ -229,11 +230,18 @@ export function RecipeList() {
             />
           </DialogContent>
         </Dialog>
+        <Button variant="outline" onClick={() => setCreateOpen(!createOpen)}>
+          <ChefHat className="h-4 w-4 mr-2" />
+          Create Recipe
+        </Button>
         <Button variant="outline" onClick={() => setBulkImportOpen(!bulkImportOpen)}>
           <Upload className="h-4 w-4 mr-2" />
           Bulk Import
         </Button>
       </div>
+
+      {/* Create recipe form */}
+      {createOpen && <CreateRecipeForm onSaved={() => { setCreateOpen(false); loadRecipes(); }} />}
 
       {/* Web search results */}
       {webSearch && webResults.length > 0 && (
@@ -926,5 +934,214 @@ function RecipeImportForm({ onSaved }: { onSaved: () => void }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function CreateRecipeForm({ onSaved }: { onSaved: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [title, setTitle] = useState("");
+  const [prepMinutes, setPrepMinutes] = useState(0);
+  const [cookMinutes, setCookMinutes] = useState(0);
+  const [servings, setServings] = useState(4);
+  const [calories, setCalories] = useState<number | "">("");
+  const [proteinG, setProteinG] = useState<number | "">("");
+  const [carbsG, setCarbsG] = useState<number | "">("");
+  const [fatG, setFatG] = useState<number | "">("");
+  const [ingredientText, setIngredientText] = useState("");
+  const [stepsText, setStepsText] = useState("");
+  const [selectedRole, setSelectedRole] = useState("complete");
+  const [selectedMealTypes, setSelectedMealTypes] = useState<string[]>(["dinner"]);
+  const [imageUrl, setImageUrl] = useState("");
+
+  async function handleSave() {
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      // Parse ingredients - one per line
+      const ingredients = ingredientText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const match = line.match(
+            /^([\d./½⅓⅔¼¾]+)?\s*(cups?|tbsp|tsp|tablespoons?|teaspoons?|oz|lbs?|g|kg|ml|cans?|cloves?)?\s*(.+)/i
+          );
+          if (match) {
+            return {
+              qty: match[1] ? parseFloat(match[1]) || null : null,
+              unit: match[2]?.toLowerCase() ?? "",
+              name: match[3].trim(),
+            };
+          }
+          return { qty: null, unit: "", name: line };
+        });
+
+      // Parse steps - one per line
+      const steps = stepsText
+        .split("\n")
+        .map((line) => line.trim().replace(/^\d+[.)]\s*/, ""))
+        .filter(Boolean);
+
+      const res = await fetch("/api/recipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          prepMinutes,
+          cookMinutes,
+          servings,
+          calories: calories || undefined,
+          proteinG: proteinG || undefined,
+          carbsG: carbsG || undefined,
+          fatG: fatG || undefined,
+          ingredients,
+          steps,
+          tags: [],
+          mealTypes: selectedMealTypes,
+          role: selectedRole,
+          imageUrl: imageUrl || undefined,
+        }),
+      });
+      if (res.ok) onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="border-border/60 overflow-hidden">
+      <div className="bg-gradient-to-r from-accent/40 to-transparent px-5 py-4">
+        <h3 className="font-display text-lg font-bold">Create a Recipe</h3>
+        <p className="text-xs text-muted-foreground">Type in your own recipe from scratch.</p>
+      </div>
+      <CardContent className="pt-5 space-y-4">
+        <div>
+          <label className="text-sm font-medium">Recipe Title</label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Greek Chicken Marinade"
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="text-sm font-medium">Prep (min)</label>
+            <Input type="number" value={prepMinutes || ""} onChange={(e) => setPrepMinutes(Number(e.target.value))} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Cook (min)</label>
+            <Input type="number" value={cookMinutes || ""} onChange={(e) => setCookMinutes(Number(e.target.value))} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Servings</label>
+            <Input type="number" value={servings} onChange={(e) => setServings(Number(e.target.value))} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-3">
+          <div>
+            <label className="text-sm font-medium">Calories</label>
+            <Input type="number" value={calories} onChange={(e) => setCalories(e.target.value ? Number(e.target.value) : "")} placeholder="—" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Protein (g)</label>
+            <Input type="number" value={proteinG} onChange={(e) => setProteinG(e.target.value ? Number(e.target.value) : "")} placeholder="—" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Carbs (g)</label>
+            <Input type="number" value={carbsG} onChange={(e) => setCarbsG(e.target.value ? Number(e.target.value) : "")} placeholder="—" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Fat (g)</label>
+            <Input type="number" value={fatG} onChange={(e) => setFatG(e.target.value ? Number(e.target.value) : "")} placeholder="—" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Image URL (optional)</label>
+          <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." />
+        </div>
+
+        {/* Role */}
+        <div>
+          <label className="text-sm font-medium">Recipe Role</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {RECIPE_ROLES.map((role) => (
+              <button
+                key={role.value}
+                type="button"
+                onClick={() => setSelectedRole(role.value)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all",
+                  selectedRole === role.value
+                    ? ROLE_COLORS[role.value]
+                    : "border-border/60 text-muted-foreground"
+                )}
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Meal type */}
+        <div>
+          <label className="text-sm font-medium">Meal Type</label>
+          <div className="flex flex-wrap gap-2 mt-1.5">
+            {MEAL_TYPES.map((mt) => {
+              const active = selectedMealTypes.includes(mt);
+              return (
+                <button
+                  key={mt}
+                  type="button"
+                  onClick={() =>
+                    setSelectedMealTypes((prev) =>
+                      active ? prev.filter((m) => m !== mt) : [...prev, mt]
+                    )
+                  }
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-sm font-medium capitalize transition-all",
+                    active
+                      ? MEAL_TYPE_COLORS[mt]
+                      : "border-border/60 text-muted-foreground"
+                  )}
+                >
+                  {mt}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Ingredients */}
+        <div>
+          <label className="text-sm font-medium">Ingredients</label>
+          <p className="text-xs text-muted-foreground mb-1">One per line. e.g. "2 tbsp olive oil" or just "salt and pepper"</p>
+          <textarea
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring min-h-[100px]"
+            value={ingredientText}
+            onChange={(e) => setIngredientText(e.target.value)}
+            placeholder={"2 tbsp olive oil\n3 cloves garlic, minced\n1 lemon, juiced\n1 tsp oregano\nSalt and pepper"}
+          />
+        </div>
+
+        {/* Steps */}
+        <div>
+          <label className="text-sm font-medium">Steps</label>
+          <p className="text-xs text-muted-foreground mb-1">One step per line.</p>
+          <textarea
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring min-h-[100px]"
+            value={stepsText}
+            onChange={(e) => setStepsText(e.target.value)}
+            placeholder={"Mix all ingredients in a bowl.\nAdd chicken and coat evenly.\nMarinate for at least 2 hours.\nGrill or bake as desired."}
+          />
+        </div>
+
+        <Button onClick={handleSave} disabled={saving || !title.trim()}>
+          {saving ? "Saving..." : "Save Recipe"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
