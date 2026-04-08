@@ -37,6 +37,9 @@ export async function POST(req: Request) {
       unit: body.unit ?? "count",
       qtyOnHand: body.qtyOnHand ?? 0,
       qtyMinimum: body.qtyMinimum ?? 0,
+      walmartUrl: body.walmartUrl ?? null,
+      walmartUrlBackup: body.walmartUrlBackup ?? null,
+      walmartPricePreference: body.walmartPricePreference ?? "best_price",
     },
   });
 

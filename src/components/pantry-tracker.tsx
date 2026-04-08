@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, AlertTriangle, Package, Zap } from "lucide-react";
+import { Plus, Minus, Trash2, AlertTriangle, Package, Zap, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 
 interface PantryItemData {
   id: string;
@@ -22,6 +22,9 @@ interface PantryItemData {
   unit: string;
   qtyOnHand: number;
   qtyMinimum: number;
+  walmartUrl?: string | null;
+  walmartUrlBackup?: string | null;
+  walmartPricePreference?: string;
 }
 
 const CATEGORIES = [
@@ -145,11 +148,26 @@ export function PantryTracker() {
     );
   }
 
+  async function updateWalmartFields(
+    id: string,
+    fields: Partial<Pick<PantryItemData, "walmartUrl" | "walmartUrlBackup" | "walmartPricePreference">>
+  ) {
+    await fetch("/api/pantry", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...fields }),
+    });
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, ...fields } : i))
+    );
+  }
+
   async function deleteItem(id: string) {
     await fetch(`/api/pantry?id=${id}`, { method: "DELETE" });
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [quickStarting, setQuickStarting] = useState(false);
 
   async function quickStartPantry() {
@@ -303,6 +321,7 @@ export function PantryTracker() {
                 <TableHead className="font-semibold">On Hand</TableHead>
                 <TableHead className="font-semibold">Min</TableHead>
                 <TableHead className="font-semibold">Unit</TableHead>
+                <TableHead className="font-semibold w-16">Walmart</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
@@ -310,8 +329,8 @@ export function PantryTracker() {
               {items.map((item) => {
                 const isLow = item.qtyOnHand <= item.qtyMinimum;
                 return (
+                  <React.Fragment key={item.id}>
                   <TableRow
-                    key={item.id}
                     className={isLow ? "bg-amber-warm/5" : ""}
                   >
                     <TableCell className="font-medium">
@@ -329,20 +348,68 @@ export function PantryTracker() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        value={item.qtyOnHand}
-                        onChange={(e) =>
-                          updateQty(item.id, Number(e.target.value))
-                        }
-                        className="w-20 h-8"
-                      />
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() =>
+                            updateQty(
+                              item.id,
+                              Math.max(0, Math.round((item.qtyOnHand - 0.5) * 10) / 10)
+                            )
+                          }
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          value={item.qtyOnHand}
+                          onChange={(e) =>
+                            updateQty(item.id, Number(e.target.value))
+                          }
+                          className="w-16 h-8 text-center"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() =>
+                            updateQty(
+                              item.id,
+                              Math.round((item.qtyOnHand + 0.5) * 10) / 10
+                            )
+                          }
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {item.qtyMinimum}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {item.unit}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 ${item.walmartUrl ? "text-blue-500 hover:text-blue-700" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
+                        onClick={() =>
+                          setExpandedItem(
+                            expandedItem === item.id ? null : item.id
+                          )
+                        }
+                        title={item.walmartUrl ? "Walmart linked" : "Add Walmart link"}
+                      >
+                        {expandedItem === item.id ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ExternalLink className="h-4 w-4" />
+                        )}
+                      </Button>
                     </TableCell>
                     <TableCell>
                       <Button
@@ -355,6 +422,62 @@ export function PantryTracker() {
                       </Button>
                     </TableCell>
                   </TableRow>
+                  {expandedItem === item.id && (
+                    <TableRow className="bg-accent/20">
+                      <TableCell colSpan={7} className="py-3">
+                        <div className="space-y-3 max-w-lg">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Primary Walmart.ca Link
+                            </label>
+                            <Input
+                              placeholder="https://www.walmart.ca/ip/..."
+                              value={item.walmartUrl ?? ""}
+                              onChange={(e) =>
+                                updateWalmartFields(item.id, {
+                                  walmartUrl: e.target.value || null,
+                                })
+                              }
+                              className="mt-1 h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Backup Walmart.ca Link
+                            </label>
+                            <Input
+                              placeholder="https://www.walmart.ca/ip/..."
+                              value={item.walmartUrlBackup ?? ""}
+                              onChange={(e) =>
+                                updateWalmartFields(item.id, {
+                                  walmartUrlBackup: e.target.value || null,
+                                })
+                              }
+                              className="mt-1 h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">
+                              When both links are set, use:
+                            </label>
+                            <select
+                              className="mt-1 rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
+                              value={item.walmartPricePreference ?? "best_price"}
+                              onChange={(e) =>
+                                updateWalmartFields(item.id, {
+                                  walmartPricePreference: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="best_price">Best price between the two</option>
+                              <option value="backup_when_oos">Backup only when primary is out of stock</option>
+                            </select>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
                 );
               })}
             </TableBody>

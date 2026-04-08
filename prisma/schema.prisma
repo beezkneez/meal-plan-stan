@@ -59,6 +59,7 @@ model User {
   recipes        Recipe[]
   mealPlans      MealPlan[]
   pantryItems    PantryItem[]
+  apiKeys        ApiKey[]
 
   // Household sharing
   householdId    String?
@@ -100,6 +101,15 @@ model UserPreferences {
 
   // UI preferences
   showMealImages    Boolean @default(true)
+
+  // Weekly email
+  emailEnabled      Boolean @default(false)
+  emailDay          Int     @default(0)       // 0=Sun..6=Sat
+  emailTime         String  @default("14:00") // 24h format
+
+  // Pantry & navigation
+  lowStockThreshold Float   @default(0.5)
+  defaultPage       String  @default("/meal-plan")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -206,7 +216,23 @@ model PantryItem {
   qtyOnHand  Float
   qtyMinimum Float @default(0)
 
+  // Walmart.ca product linking
+  walmartUrl             String?
+  walmartUrlBackup       String?
+  walmartPricePreference String @default("best_price") // "best_price" | "backup_when_oos"
+
   updatedAt DateTime @updatedAt
+}
+
+// ── API Keys (Chrome Extension auth) ──
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyHash   String    @unique
+  lastUsed  DateTime?
+  createdAt DateTime  @default(now())
 }
 
 // ── Google Calendar Sync ──

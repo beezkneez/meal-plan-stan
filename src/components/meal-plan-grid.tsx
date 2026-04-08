@@ -301,14 +301,23 @@ export function MealPlanGrid() {
         const updated = await res.json();
         setPlan((prev) => {
           if (!prev) return prev;
-          return {
-            ...prev,
-            slots: prev.slots.map((s) =>
-              s.id === editingSlot.id
-                ? { ...s, recipeId: null, recipe: null, notes: customText, isLeftover: false }
-                : s
-            ),
-          };
+          let newSlots = prev.slots.map((s) =>
+            s.id === editingSlot.id
+              ? { ...s, recipeId: null, recipe: null, notes: customText, isLeftover: false }
+              : s
+          );
+          // Remove leftover lunches if dinner recipe was cleared
+          if (updated.updatedLeftoverSlots?.length) {
+            const deletedIds = new Set(
+              updated.updatedLeftoverSlots
+                .filter((l: { _deleted?: boolean }) => l._deleted)
+                .map((l: { id: string }) => l.id)
+            );
+            if (deletedIds.size) {
+              newSlots = newSlots.filter((s) => !deletedIds.has(s.id));
+            }
+          }
+          return { ...prev, slots: newSlots };
         });
         setEditingSlot(null);
       }
@@ -334,14 +343,26 @@ export function MealPlanGrid() {
         const updated = await res.json();
         setPlan((prev) => {
           if (!prev) return prev;
-          return {
-            ...prev,
-            slots: prev.slots.map((s) =>
-              s.id === editingSlot.id
-                ? { ...s, recipeId: updated.recipeId, recipe: updated.recipe, notes: null, isLeftover: false }
-                : s
-            ),
-          };
+          let newSlots = prev.slots.map((s) =>
+            s.id === editingSlot.id
+              ? { ...s, recipeId: updated.recipeId, recipe: updated.recipe, notes: null, isLeftover: false }
+              : s
+          );
+          // Apply leftover cascade updates
+          if (updated.updatedLeftoverSlots?.length) {
+            for (const leftover of updated.updatedLeftoverSlots) {
+              if (leftover._deleted) {
+                newSlots = newSlots.filter((s) => s.id !== leftover.id);
+              } else {
+                newSlots = newSlots.map((s) =>
+                  s.id === leftover.id
+                    ? { ...s, recipeId: leftover.recipeId, recipe: leftover.recipe }
+                    : s
+                );
+              }
+            }
+          }
+          return { ...prev, slots: newSlots };
         });
         setEditingSlot(null);
       }

@@ -26,6 +26,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const oldRecipeId = slot.recipeId;
+
   const updateData: Record<string, unknown> = {};
   if (recipeId !== undefined) updateData.recipeId = recipeId ?? null;
   if (notes !== undefined) updateData.notes = notes ?? null;
@@ -38,7 +40,61 @@ export async function PUT(req: Request) {
     include: { recipe: true },
   });
 
-  return NextResponse.json(updated);
+  // Cascade: if this is a dinner and the recipe changed, update next-day leftover lunches
+  let updatedLeftoverSlots: typeof updated[] = [];
+  if (
+    slot.mealType === "dinner" &&
+    recipeId !== undefined &&
+    recipeId !== oldRecipeId
+  ) {
+    const slotDate = new Date(slot.date);
+    const nextDay = new Date(slotDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayStr = nextDay.toISOString().split("T")[0];
+
+    // Find leftover lunches the next day that came from this dinner
+    const leftoverLunches = await prisma.mealSlot.findMany({
+      where: {
+        mealPlanId: slot.mealPlanId,
+        mealType: "lunch",
+        isLeftover: true,
+        date: {
+          gte: new Date(nextDayStr + "T00:00:00Z"),
+          lt: new Date(nextDayStr + "T23:59:59Z"),
+        },
+        OR: [
+          { leftoverSourceSlotId: slotId },
+          ...(oldRecipeId ? [{ recipeId: oldRecipeId }] : []),
+        ],
+      },
+    });
+
+    if (leftoverLunches.length > 0) {
+      if (recipeId) {
+        // Update leftover lunches to the new recipe
+        for (const lunch of leftoverLunches) {
+          const updatedLunch = await prisma.mealSlot.update({
+            where: { id: lunch.id },
+            data: { recipeId: recipeId, leftoverSourceSlotId: slotId },
+            include: { recipe: true },
+          });
+          updatedLeftoverSlots.push(updatedLunch);
+        }
+      } else {
+        // Dinner recipe cleared — remove leftover lunches
+        await prisma.mealSlot.deleteMany({
+          where: { id: { in: leftoverLunches.map((l) => l.id) } },
+        });
+        updatedLeftoverSlots = leftoverLunches.map((l) => ({
+          ...l,
+          recipe: null,
+          _deleted: true,
+        })) as never;
+      }
+    }
+  }
+
+  return NextResponse.json({ ...updated, updatedLeftoverSlots });
 }
 
 // DELETE: remove a meal slot + cascade leftover lunches that depended on it

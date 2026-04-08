@@ -146,6 +146,9 @@ export async function GET(req: Request) {
     fromPantry?: boolean;
     pantryQty?: number;
     totalNeeded?: number;
+    walmartUrl?: string | null;
+    walmartUrlBackup?: string | null;
+    walmartPricePreference?: string;
   }> = [];
 
   const pantryDeductions: Array<{ name: string; qty: number }> = [];
@@ -162,14 +165,18 @@ export async function GET(req: Request) {
       }
     }
 
+    const matchedPantry = pantryMap.get(key);
     groceryItems.push({
       name: item.name,
       qty: Math.round(neededQty * 100) / 100,
       unit: item.unit,
       section: classifyIngredient(item.name),
       fromPantry: neededQty === 0,
-      pantryQty: pantryMap.get(key)?.qtyOnHand ?? 0,
+      pantryQty: matchedPantry?.qtyOnHand ?? 0,
       totalNeeded: Math.round(item.qty * 100) / 100,
+      walmartUrl: matchedPantry?.walmartUrl ?? null,
+      walmartUrlBackup: matchedPantry?.walmartUrlBackup ?? null,
+      walmartPricePreference: matchedPantry?.walmartPricePreference ?? "best_price",
     });
   }
 

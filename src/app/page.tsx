@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   CalendarDays,
@@ -45,7 +48,18 @@ const features = [
   },
 ];
 
-export default function Dashboard() {
+export default async function Dashboard() {
+  const session = await auth();
+  if (session?.user?.id) {
+    const prefs = await prisma.userPreferences.findUnique({
+      where: { userId: session.user.id },
+      select: { defaultPage: true },
+    });
+    if (prefs?.defaultPage && prefs.defaultPage !== "/") {
+      redirect(prefs.defaultPage);
+    }
+  }
+
   return (
     <div className="space-y-10">
       {/* Hero section */}

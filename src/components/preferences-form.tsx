@@ -15,6 +15,12 @@ import {
   Utensils,
   Clock,
   Users,
+  Mail,
+  Home,
+  Package,
+  Key,
+  Copy,
+  Check,
 } from "lucide-react";
 
 const EATING_STYLES = [
@@ -88,6 +94,17 @@ const DIETARY_NEEDS = [
   "gluten-free",
 ];
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const DEFAULT_PAGES = [
+  { value: "/", label: "Dashboard" },
+  { value: "/meal-plan", label: "Meal Plan" },
+  { value: "/pantry", label: "Pantry" },
+  { value: "/recipes", label: "Recipes" },
+  { value: "/shopping-list", label: "Shopping List" },
+  { value: "/schedule", label: "Schedule" },
+];
+
 interface Prefs {
   householdSize: number;
   householdSizeWorkDay: number;
@@ -100,6 +117,11 @@ interface Prefs {
   preferSlowCooker: boolean;
   preferLeftovers: boolean;
   maxPrepMinutes: number;
+  lowStockThreshold: number;
+  defaultPage: string;
+  emailEnabled: boolean;
+  emailDay: number;
+  emailTime: string;
 }
 
 const DEFAULTS: Prefs = {
@@ -114,6 +136,11 @@ const DEFAULTS: Prefs = {
   preferSlowCooker: false,
   preferLeftovers: true,
   maxPrepMinutes: 60,
+  lowStockThreshold: 0.5,
+  defaultPage: "/meal-plan",
+  emailEnabled: false,
+  emailDay: 0,
+  emailTime: "14:00",
 };
 
 export function PreferencesForm() {
@@ -123,6 +150,10 @@ export function PreferencesForm() {
   const [saved, setSaved] = useState(false);
   const [customDislike, setCustomDislike] = useState("");
   const [customAllergy, setCustomAllergy] = useState("");
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [generatingKey, setGeneratingKey] = useState(false);
+  const [keyCopied, setKeyCopied] = useState(false);
 
   const dislikes: string[] = JSON.parse(prefs.dislikes);
   const allergies: string[] = JSON.parse(prefs.allergies);
@@ -136,6 +167,10 @@ export function PreferencesForm() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetch("/api/auth/api-key")
+      .then((r) => r.json())
+      .then((data) => setHasApiKey(data.hasKey))
+      .catch(() => {});
   }, []);
 
   function toggleInList(
@@ -182,11 +217,44 @@ export function PreferencesForm() {
           preferSlowCooker: prefs.preferSlowCooker,
           preferLeftovers: prefs.preferLeftovers,
           maxPrepMinutes: prefs.maxPrepMinutes,
+          lowStockThreshold: prefs.lowStockThreshold,
+          defaultPage: prefs.defaultPage,
+          emailEnabled: prefs.emailEnabled,
+          emailDay: prefs.emailDay,
+          emailTime: prefs.emailTime,
         }),
       });
       if (res.ok) setSaved(true);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function generateApiKey() {
+    setGeneratingKey(true);
+    try {
+      const res = await fetch("/api/auth/api-key", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setApiKey(data.apiKey);
+        setHasApiKey(true);
+      }
+    } finally {
+      setGeneratingKey(false);
+    }
+  }
+
+  async function revokeApiKey() {
+    await fetch("/api/auth/api-key", { method: "DELETE" });
+    setApiKey(null);
+    setHasApiKey(false);
+  }
+
+  function copyApiKey() {
+    if (apiKey) {
+      navigator.clipboard.writeText(apiKey);
+      setKeyCopied(true);
+      setTimeout(() => setKeyCopied(false), 2000);
     }
   }
 
@@ -537,6 +605,208 @@ export function PreferencesForm() {
               }
               className="w-24 mt-1"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pantry & Navigation */}
+      <Card className="border-border/60">
+        <CardHeader className="bg-gradient-to-r from-accent/40 to-transparent pb-4">
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            <CardTitle className="font-display text-xl">
+              Pantry & Navigation
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-4">
+          <div>
+            <label className="text-sm font-medium">
+              Low Stock Alert Threshold
+            </label>
+            <p className="text-xs text-muted-foreground mb-1">
+              Items at or below this quantity will be flagged as low stock and
+              included in your weekly email.
+            </p>
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={0.5}
+              value={prefs.lowStockThreshold}
+              onChange={(e) =>
+                setPrefs({
+                  ...prefs,
+                  lowStockThreshold: Number(e.target.value),
+                })
+              }
+              className="w-24 mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Default Landing Page</label>
+            <p className="text-xs text-muted-foreground mb-1">
+              Which page to open when you launch the app.
+            </p>
+            <select
+              className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+              value={prefs.defaultPage}
+              onChange={(e) =>
+                setPrefs({ ...prefs, defaultPage: e.target.value })
+              }
+            >
+              {DEFAULT_PAGES.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Weekly Email */}
+      <Card className="border-border/60">
+        <CardHeader className="bg-gradient-to-r from-accent/40 to-transparent pb-4">
+          <div className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" />
+            <CardTitle className="font-display text-xl">
+              Weekly Email
+            </CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Get your meal plan and shopping list delivered to your inbox each
+            week.
+          </p>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-4">
+          <button
+            onClick={() =>
+              setPrefs({ ...prefs, emailEnabled: !prefs.emailEnabled })
+            }
+            className={cn(
+              "rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-all duration-200",
+              prefs.emailEnabled
+                ? "border-primary bg-primary/5"
+                : "border-border/60 text-muted-foreground hover:border-primary/30"
+            )}
+          >
+            {prefs.emailEnabled ? "Email Enabled" : "Email Disabled"}
+          </button>
+          {prefs.emailEnabled && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium">Send On</label>
+                <select
+                  className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring mt-1 w-full"
+                  value={prefs.emailDay}
+                  onChange={(e) =>
+                    setPrefs({ ...prefs, emailDay: Number(e.target.value) })
+                  }
+                >
+                  {DAY_NAMES.map((d, i) => (
+                    <option key={i} value={i}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Time</label>
+                <select
+                  className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring mt-1 w-full"
+                  value={prefs.emailTime}
+                  onChange={(e) =>
+                    setPrefs({ ...prefs, emailTime: e.target.value })
+                  }
+                >
+                  {Array.from({ length: 24 }, (_, h) => {
+                    const time = `${String(h).padStart(2, "0")}:00`;
+                    const label =
+                      h === 0
+                        ? "12:00 AM"
+                        : h < 12
+                          ? `${h}:00 AM`
+                          : h === 12
+                            ? "12:00 PM"
+                            : `${h - 12}:00 PM`;
+                    return (
+                      <option key={time} value={time}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Browser Extension */}
+      <Card className="border-border/60">
+        <CardHeader className="bg-gradient-to-r from-accent/40 to-transparent pb-4">
+          <div className="flex items-center gap-2">
+            <Key className="h-5 w-5 text-primary" />
+            <CardTitle className="font-display text-xl">
+              Browser Extension
+            </CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Add items to your pantry directly from Walmart.ca product pages.
+          </p>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-4">
+          {apiKey ? (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-amber-deep">
+                Copy this key now — it won&apos;t be shown again!
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 rounded-lg bg-muted px-3 py-2 text-xs font-mono break-all">
+                  {apiKey}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 h-9 w-9"
+                  onClick={copyApiKey}
+                >
+                  {keyCopied ? (
+                    <Check className="h-4 w-4 text-sage" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : hasApiKey ? (
+            <p className="text-sm text-muted-foreground">
+              API key is active. The extension is connected.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Generate an API key to connect the Chrome extension.
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              variant={hasApiKey ? "outline" : "default"}
+              onClick={generateApiKey}
+              disabled={generatingKey}
+            >
+              <Key className="h-4 w-4 mr-2" />
+              {generatingKey
+                ? "Generating..."
+                : hasApiKey
+                  ? "Regenerate Key"
+                  : "Generate API Key"}
+            </Button>
+            {hasApiKey && (
+              <Button variant="ghost" onClick={revokeApiKey} className="text-destructive">
+                Revoke
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

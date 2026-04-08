@@ -22,6 +22,9 @@ interface GroceryItem {
   fromPantry?: boolean;
   pantryQty?: number;
   totalNeeded?: number;
+  walmartUrl?: string | null;
+  walmartUrlBackup?: string | null;
+  walmartPricePreference?: string;
 }
 
 interface GrocerySection {
@@ -169,8 +172,10 @@ export function ShoppingListView() {
     }
   }
 
-  function walmartSearchUrl(itemName: string): string {
-    return `https://www.walmart.ca/search?q=${encodeURIComponent(itemName)}`;
+  function walmartUrl(item: GroceryItem): string {
+    // Use direct product link if available, otherwise fall back to search
+    if (item.walmartUrl) return item.walmartUrl;
+    return `https://www.walmart.ca/search?q=${encodeURIComponent(item.name)}`;
   }
 
   function selectTrips(count: 1 | 2) {
@@ -442,12 +447,17 @@ export function ShoppingListView() {
                         {/* Walmart search */}
                         {!item.fromPantry && (
                           <a
-                            href={walmartSearchUrl(item.name)}
+                            href={walmartUrl(item)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 hover:text-primary hover:bg-accent/30 transition-colors"
-                            title="Search on Walmart"
+                            className={cn(
+                              "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                              item.walmartUrl
+                                ? "text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                : "text-muted-foreground/40 hover:text-primary hover:bg-accent/30"
+                            )}
+                            title={item.walmartUrl ? "Open on Walmart" : "Search on Walmart"}
                           >
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
