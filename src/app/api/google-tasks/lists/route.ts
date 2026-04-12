@@ -17,6 +17,12 @@ export async function GET() {
     );
   }
 
-  const lists = await fetchTaskLists(accessToken);
-  return NextResponse.json({ lists });
+  const result = await fetchTaskLists(accessToken);
+  if (result.error) {
+    return NextResponse.json(
+      { lists: [], error: result.error },
+      { status: 502 }
+    );
+  }
+  return NextResponse.json({ lists: result.lists });
 }

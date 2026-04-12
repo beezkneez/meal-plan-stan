@@ -225,12 +225,19 @@ export function PreferencesForm() {
 
   async function loadTaskLists() {
     setLoadingTaskLists(true);
+    setTaskSyncMessage("");
     try {
       const res = await fetch("/api/google-tasks/lists");
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json();
+      if (data.lists?.length > 0) {
         setTaskLists(data.lists);
+      } else if (data.error) {
+        setTaskSyncMessage(`Error: ${data.error}`);
+      } else {
+        setTaskSyncMessage("No task lists found in your Google account");
       }
+    } catch {
+      setTaskSyncMessage("Failed to load task lists");
     } finally {
       setLoadingTaskLists(false);
     }

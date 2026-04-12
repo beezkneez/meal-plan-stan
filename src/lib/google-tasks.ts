@@ -18,7 +18,7 @@ export { getGoogleAccessToken };
 
 export async function fetchTaskLists(
   accessToken: string
-): Promise<GoogleTaskList[]> {
+): Promise<{ lists: GoogleTaskList[]; error?: string }> {
   const res = await fetch(
     "https://tasks.googleapis.com/tasks/v1/users/@me/lists",
     {
@@ -26,14 +26,20 @@ export async function fetchTaskLists(
     }
   );
 
-  if (!res.ok) return [];
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const message =
+      errorData?.error?.message ?? `Google Tasks API error: ${res.status}`;
+    return { lists: [], error: message };
+  }
 
   const data = await res.json();
-  return (data.items ?? []).map((list: GoogleTaskList) => ({
+  const lists = (data.items ?? []).map((list: GoogleTaskList) => ({
     id: list.id,
     title: list.title,
     updated: list.updated,
   }));
+  return { lists };
 }
 
 export async function fetchTasks(
