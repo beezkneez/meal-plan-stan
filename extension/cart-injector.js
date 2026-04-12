@@ -28,31 +28,21 @@
 
   // Check if the product is out of stock
   function isOutOfStock() {
-    // Common Walmart.ca OOS indicators
     const oosSelectors = [
+      '[data-automation-id="oos"]',
       '[data-testid="outOfStockBtn"]',
       '[data-testid="out-of-stock-message"]',
-      ".out-of-stock-message",
     ];
 
     for (const sel of oosSelectors) {
       if (document.querySelector(sel)) return true;
     }
 
-    // Check for "Out of stock" text in the buy-box area
-    const buyBox =
-      document.querySelector('[data-testid="buy-box"]') ||
-      document.querySelector(".buy-box-container") ||
-      document.querySelector('[class*="buy-box"]');
-
-    if (buyBox) {
-      const text = buyBox.textContent?.toLowerCase() || "";
-      if (
-        text.includes("out of stock") ||
-        text.includes("currently unavailable")
-      ) {
-        return true;
-      }
+    // Check for "Out of stock" text near the buy area
+    const buttons = document.querySelectorAll("button");
+    for (const btn of buttons) {
+      const text = btn.textContent?.trim().toLowerCase() || "";
+      if (text.includes("out of stock")) return true;
     }
 
     // Check if add-to-cart button is disabled
@@ -64,24 +54,29 @@
     return false;
   }
 
-  // Find the "Add to Cart" button using multiple strategies
+  // Find the "Add to Cart" button using actual Walmart.ca selectors
   function findAddToCartButton() {
-    const selectors = [
+    // Primary: data-automation-id="atc" (confirmed from live Walmart.ca)
+    const primary = document.querySelector('[data-automation-id="atc"]');
+    if (primary) return primary;
+
+    // Fallbacks
+    const fallbacks = [
+      'button[data-dca-event="addToCart"]',
       '[data-testid="addToCartBtn"]',
       'button[data-automation="addToCartBtn"]',
-      '[data-testid="add-to-cart-button"]',
     ];
 
-    for (const sel of selectors) {
+    for (const sel of fallbacks) {
       const el = document.querySelector(sel);
       if (el) return el;
     }
 
-    // Fallback: find button with "Add to cart" text
+    // Last resort: find button with "Add to cart" text
     const buttons = document.querySelectorAll("button");
     for (const btn of buttons) {
       const text = btn.textContent?.trim().toLowerCase() || "";
-      if (text === "add to cart" || text === "add to cart - ") {
+      if (text === "add to cart") {
         return btn;
       }
     }
@@ -89,30 +84,31 @@
     return null;
   }
 
-  // Wait for the cart confirmation (toast, modal, or cart count change)
+  // Wait for the cart confirmation
   function waitForCartConfirmation(timeout = 5000) {
     return new Promise((resolve) => {
       const start = Date.now();
 
       function check() {
-        // Check for success toast/modal
+        // Check for flyout cart or confirmation elements
         const successSelectors = [
-          '[data-testid="added-to-cart-confirmation"]',
+          '[data-automation-id="atc-flyout"]',
+          '[data-automation-id="cart-flyout"]',
           '[data-testid="atc-confirmation"]',
-          ".added-to-cart-confirmation",
           '[class*="flyout-cart"]',
+          '[class*="CartFlyout"]',
         ];
 
         for (const sel of successSelectors) {
           if (document.querySelector(sel)) return resolve(true);
         }
 
-        // Check for any toast with "added" text
-        const toasts = document.querySelectorAll(
-          '[role="alert"], [role="status"], .toast, .notification'
+        // Check for any element with "added" text
+        const alerts = document.querySelectorAll(
+          '[role="alert"], [role="status"], [aria-live="polite"]'
         );
-        for (const toast of toasts) {
-          const text = toast.textContent?.toLowerCase() || "";
+        for (const el of alerts) {
+          const text = el.textContent?.toLowerCase() || "";
           if (text.includes("added to cart") || text.includes("added to your cart")) {
             return resolve(true);
           }
@@ -122,7 +118,6 @@
         setTimeout(check, 500);
       }
 
-      // Give the page a moment to react before checking
       setTimeout(check, 500);
     });
   }
@@ -133,11 +128,10 @@
       return { success: false, reason: "oos" };
     }
 
-    // Step 2: Find the add-to-cart button
+    // Step 2: Wait for the add-to-cart button to appear
     const addBtn = await waitForElement([
-      '[data-testid="addToCartBtn"]',
-      'button[data-automation="addToCartBtn"]',
-      '[data-testid="add-to-cart-button"]',
+      '[data-automation-id="atc"]',
+      'button[data-dca-event="addToCart"]',
     ]);
 
     if (!addBtn && isOutOfStock()) {
@@ -164,8 +158,7 @@
       return { success: true };
     }
 
-    // Even without confirmation, the click may have worked
-    // (some Walmart pages don't show a clear confirmation)
+    // Even without confirmation, the click likely worked
     return { success: true, reason: "no_confirmation_detected" };
   } catch (err) {
     return { success: false, reason: "script_error" };
