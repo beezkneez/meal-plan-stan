@@ -96,10 +96,32 @@ export async function sendShoppingEmail(userId: string) {
     orderBy: [{ category: "asc" }, { name: "asc" }],
   });
 
+  // Fetch unmatched cart queue items (no Walmart link) for current week
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const unmatchedCartItems = await prisma.cartQueueItem.findMany({
+    where: {
+      userId: householdUserId,
+      weekOf: weekStart,
+      status: "no_url",
+    },
+    orderBy: { name: "asc" },
+  });
+
   const html = buildShoppingCartEmail({
     userName: user.name || "there",
     mealPlan,
     pantryItems,
+    unmatchedCartItems: unmatchedCartItems.map((i) => ({
+      name: i.name,
+      qty: i.qty,
+      unit: i.unit,
+      section: i.section,
+      source: i.source,
+    })),
   });
 
   const { error } = await getResend().emails.send({

@@ -58,8 +58,11 @@ model User {
   calendarSyncs  CalendarSync[]
   recipes        Recipe[]
   mealPlans      MealPlan[]
-  pantryItems    PantryItem[]
-  apiKeys        ApiKey[]
+  pantryItems      PantryItem[]
+  apiKeys          ApiKey[]
+  cartQueueItems   CartQueueItem[]
+  adHocItems       AdHocItem[]
+  googleTasksSync  GoogleTasksSync?
 
   // Household sharing
   householdId    String?
@@ -251,4 +254,64 @@ model CalendarSync {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, googleCalendarId])
+}
+
+// ── Cart Queue (Walmart auto-add-to-cart) ──
+
+model CartQueueItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name    String
+  qty     Float  @default(1)
+  unit    String @default("")
+  section String @default("") // grocery section
+
+  walmartUrl       String?
+  walmartUrlBackup String?
+  source           String @default("meal_plan") // "meal_plan" | "google_tasks" | "manual"
+
+  status     String  @default("pending") // "pending" | "added" | "failed" | "no_url"
+  errorNote  String?
+  usedBackup Boolean @default(false)
+
+  weekOf    DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, weekOf, status])
+}
+
+// ── Ad-Hoc Items (Google Tasks imports) ──
+
+model AdHocItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String
+  qty          Float   @default(1)
+  unit         String  @default("")
+  googleTaskId String?
+  walmartUrl   String? // auto-matched from pantry
+  imported     Boolean @default(false) // pulled into CartQueueItem?
+
+  createdAt DateTime @default(now())
+}
+
+// ── Google Tasks Sync ──
+
+model GoogleTasksSync {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskListId   String
+  taskListName String
+  enabled      Boolean @default(true)
+
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }

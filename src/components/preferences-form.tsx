@@ -21,6 +21,9 @@ import {
   Key,
   Copy,
   Check,
+  ListChecks,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 
 const EATING_STYLES = [
@@ -155,6 +158,19 @@ export function PreferencesForm() {
   const [generatingKey, setGeneratingKey] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
 
+  // Google Tasks state
+  const [taskLists, setTaskLists] = useState<Array<{ id: string; title: string }>>([]);
+  const [taskSync, setTaskSync] = useState<{
+    taskListId: string;
+    taskListName: string;
+    enabled: boolean;
+    lastSyncAt: string | null;
+  } | null>(null);
+  const [loadingTaskLists, setLoadingTaskLists] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [selectedTaskList, setSelectedTaskList] = useState("");
+  const [taskSyncMessage, setTaskSyncMessage] = useState("");
+
   const dislikes: string[] = JSON.parse(prefs.dislikes);
   const allergies: string[] = JSON.parse(prefs.allergies);
   const dietaryNeeds: string[] = JSON.parse(prefs.dietaryNeeds);
@@ -170,6 +186,15 @@ export function PreferencesForm() {
     fetch("/api/auth/api-key")
       .then((r) => r.json())
       .then((data) => setHasApiKey(data.hasKey))
+      .catch(() => {});
+    fetch("/api/google-tasks/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.sync) {
+          setTaskSync(data.sync);
+          setSelectedTaskList(data.sync.taskListId);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -196,6 +221,69 @@ export function PreferencesForm() {
       setPrefs({ ...prefs, [field]: JSON.stringify([...list, trimmed]) });
     }
     setter("");
+  }
+
+  async function loadTaskLists() {
+    setLoadingTaskLists(true);
+    try {
+      const res = await fetch("/api/google-tasks/lists");
+      if (res.ok) {
+        const data = await res.json();
+        setTaskLists(data.lists);
+      }
+    } finally {
+      setLoadingTaskLists(false);
+    }
+  }
+
+  async function saveTaskSync() {
+    const list = taskLists.find((l) => l.id === selectedTaskList);
+    if (!list) return;
+    const res = await fetch("/api/google-tasks/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskListId: list.id,
+        taskListName: list.title,
+        enabled: true,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setTaskSync(data.sync);
+      setTaskSyncMessage("Google Tasks connected!");
+      setTimeout(() => setTaskSyncMessage(""), 3000);
+    }
+  }
+
+  async function disconnectTaskSync() {
+    await fetch("/api/google-tasks/settings", { method: "DELETE" });
+    setTaskSync(null);
+    setSelectedTaskList("");
+    setTaskSyncMessage("");
+  }
+
+  async function triggerTaskSync() {
+    setSyncing(true);
+    setTaskSyncMessage("");
+    try {
+      const res = await fetch("/api/google-tasks/sync", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setTaskSyncMessage(`Imported ${data.imported} item(s)`);
+        // Refresh sync settings to get updated lastSyncAt
+        const settingsRes = await fetch("/api/google-tasks/settings");
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          if (settingsData.sync) setTaskSync(settingsData.sync);
+        }
+      } else {
+        setTaskSyncMessage("Sync failed — check Google connection");
+      }
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setTaskSyncMessage(""), 5000);
+    }
   }
 
   async function save() {
@@ -739,6 +827,111 @@ export function PreferencesForm() {
                 </select>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Google Tasks Import */}
+      <Card className="border-border/60">
+        <CardHeader className="bg-gradient-to-r from-accent/40 to-transparent pb-4">
+          <div className="flex items-center gap-2">
+            <ListChecks className="h-5 w-5 text-primary" />
+            <CardTitle className="font-display text-xl">
+              Google Tasks Import
+            </CardTitle>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Import shopping items from a Google Tasks list into your cart queue nightly.
+          </p>
+        </CardHeader>
+        <CardContent className="pt-5 space-y-4">
+          {taskSync ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    Connected: {taskSync.taskListName}
+                  </p>
+                  {taskSync.lastSyncAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Last sync:{" "}
+                      {new Date(taskSync.lastSyncAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+                <Badge variant={taskSync.enabled ? "default" : "secondary"}>
+                  {taskSync.enabled ? "Active" : "Paused"}
+                </Badge>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={triggerTaskSync}
+                  disabled={syncing}
+                >
+                  {syncing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Sync Now
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={disconnectTaskSync}
+                  className="text-destructive"
+                >
+                  Disconnect
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {taskLists.length === 0 ? (
+                <Button
+                  variant="outline"
+                  onClick={loadTaskLists}
+                  disabled={loadingTaskLists}
+                >
+                  {loadingTaskLists ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <ListChecks className="h-4 w-4 mr-2" />
+                  )}
+                  Load Task Lists
+                </Button>
+              ) : (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">Select a Tasks List</label>
+                    <select
+                      className="rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring mt-1 w-full"
+                      value={selectedTaskList}
+                      onChange={(e) => setSelectedTaskList(e.target.value)}
+                    >
+                      <option value="">Choose a list...</option>
+                      {taskLists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    onClick={saveTaskSync}
+                    disabled={!selectedTaskList}
+                    size="sm"
+                  >
+                    Connect
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+          {taskSyncMessage && (
+            <p className="text-sm text-primary font-medium">{taskSyncMessage}</p>
           )}
         </CardContent>
       </Card>

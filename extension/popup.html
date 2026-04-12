@@ -9,7 +9,7 @@
         box-sizing: border-box;
       }
       body {
-        width: 320px;
+        width: 340px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         background: #faf9f7;
         color: #1a1a1a;
@@ -53,11 +53,9 @@
       input:focus {
         border-color: #c4704b;
       }
-      button {
+      .btn {
         width: 100%;
         padding: 10px;
-        background: linear-gradient(135deg, #c4704b 0%, #a85d3a 100%);
-        color: white;
         border: none;
         border-radius: 8px;
         font-size: 13px;
@@ -65,8 +63,21 @@
         cursor: pointer;
         transition: opacity 0.2s;
       }
-      button:hover {
+      .btn:hover {
         opacity: 0.9;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #c4704b 0%, #a85d3a 100%);
+        color: white;
+      }
+      .btn-cart {
+        background: linear-gradient(135deg, #0071dc 0%, #004c91 100%);
+        color: white;
+        margin-top: 8px;
       }
       .status {
         margin-top: 10px;
@@ -92,6 +103,78 @@
         color: #999;
         line-height: 1.5;
       }
+      .divider {
+        height: 1px;
+        background: #e5e2dc;
+        margin: 16px 0;
+      }
+      .section-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .section-title svg {
+        width: 16px;
+        height: 16px;
+      }
+      .progress-bar {
+        width: 100%;
+        height: 6px;
+        background: #e5e2dc;
+        border-radius: 3px;
+        margin: 8px 0;
+        overflow: hidden;
+        display: none;
+      }
+      .progress-bar.active {
+        display: block;
+      }
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #0071dc, #004c91);
+        border-radius: 3px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+      .progress-text {
+        font-size: 12px;
+        color: #666;
+        text-align: center;
+        display: none;
+      }
+      .progress-text.active {
+        display: block;
+      }
+      .results {
+        margin-top: 8px;
+        font-size: 12px;
+        display: none;
+      }
+      .results.active {
+        display: block;
+      }
+      .results .stat {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin: 2px;
+        font-weight: 600;
+      }
+      .stat-added {
+        background: #d4edda;
+        color: #155724;
+      }
+      .stat-failed {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .stat-backup {
+        background: #fff3cd;
+        color: #856404;
+      }
     </style>
   </head>
   <body>
@@ -104,19 +187,48 @@
       <h1>Meal Plan Stan</h1>
     </div>
 
+    <!-- Cart Queue Section -->
+    <div class="section-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/>
+        <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+      </svg>
+      Walmart Cart
+    </div>
+
+    <button id="startCart" class="btn btn-cart" disabled>
+      Add Shopping List to Cart
+    </button>
+
+    <div id="progressBar" class="progress-bar">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+    <div id="progressText" class="progress-text"></div>
+
+    <div id="cartResults" class="results">
+      <!-- Filled dynamically -->
+    </div>
+
+    <div id="cartStatus" class="status"></div>
+
+    <div class="divider"></div>
+
+    <!-- Settings Section -->
+    <div class="section-title">Settings</div>
+
     <label for="appUrl">App URL</label>
     <input id="appUrl" type="url" placeholder="https://your-app.railway.app" />
 
     <label for="apiKey">API Key</label>
     <input id="apiKey" type="password" placeholder="Paste your API key from Settings" />
 
-    <button id="save">Save Settings</button>
+    <button id="save" class="btn btn-primary">Save Settings</button>
 
     <div id="status" class="status"></div>
 
     <p class="help">
       Get your API key from the Settings page in Meal Plan Stan.
-      Then visit any product page on walmart.ca to see the "Add to Pantry" button.
+      Visit any product page on walmart.ca to see the "Add to Pantry" button.
     </p>
 
     <script src="popup.js"></script>

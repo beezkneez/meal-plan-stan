@@ -161,14 +161,24 @@ export function buildWeeklyMealPlanEmail({
   return html;
 }
 
+interface UnmatchedCartItem {
+  name: string;
+  qty: number;
+  unit: string;
+  section: string;
+  source: string;
+}
+
 export function buildShoppingCartEmail({
   userName,
   mealPlan,
   pantryItems,
+  unmatchedCartItems = [],
 }: {
   userName: string;
   mealPlan: MealPlanData;
   pantryItems: PantryItemData[];
+  unmatchedCartItems?: UnmatchedCartItem[];
 }): string {
   let html = `<div style="${STYLES.body}">`;
 
@@ -219,6 +229,23 @@ export function buildShoppingCartEmail({
       const searchUrl = `https://www.walmart.ca/search?q=${encodeURIComponent(item.name)}`;
       html += `<li style="font-size: 14px; margin-bottom: 4px;">
         ${item.name} (${item.qtyOnHand} ${item.unit})
+        — <a href="${searchUrl}" style="${STYLES.link}">Search Walmart</a>
+      </li>`;
+    }
+    html += `</ul></div>`;
+  }
+
+  // Unmatched cart queue items (meal plan + Google Tasks items without Walmart links)
+  if (unmatchedCartItems.length > 0) {
+    html += `<div style="${STYLES.card}">
+      <h2 style="${STYLES.sectionTitle}">&#x1F50D; Manual Add Required</h2>
+      <p style="font-size: 13px; color: #666; margin: 0 0 12px;">These items from your cart queue don't have a Walmart link yet:</p>
+      <ul style="margin: 0; padding-left: 20px;">`;
+    for (const item of unmatchedCartItems) {
+      const searchUrl = `https://www.walmart.ca/search?q=${encodeURIComponent(item.name)}`;
+      const sourceLabel = item.source === "google_tasks" ? " (from Tasks)" : "";
+      html += `<li style="font-size: 14px; margin-bottom: 4px;">
+        ${item.name}${item.qty > 1 ? ` x${item.qty}` : ""}${item.unit ? ` ${item.unit}` : ""}${sourceLabel}
         — <a href="${searchUrl}" style="${STYLES.link}">Search Walmart</a>
       </li>`;
     }

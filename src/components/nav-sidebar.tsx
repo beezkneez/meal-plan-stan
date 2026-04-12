@@ -32,6 +32,7 @@ const navItems = [
   { href: "/discover", label: "Discover", icon: Sparkles },
   { href: "/pantry", label: "Pantry", icon: Package },
   { href: "/shopping-list", label: "Shopping List", icon: ShoppingCart },
+  { href: "/cart-queue", label: "Cart Queue", icon: ShoppingCart },
   { href: "/calendars", label: "Calendars", icon: CalendarDays },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

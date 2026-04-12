@@ -1,35 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getHouseholdUserId } from "@/lib/household";
-import { createHash } from "crypto";
+import { authenticateApiKey } from "@/lib/api-key-auth";
 
 export async function POST(req: Request) {
-  // Authenticate via API key
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "API key required" }, { status: 401 });
+  const auth = await authenticateApiKey(req);
+  if (!auth.success) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const apiKey = authHeader.slice(7);
-  const keyHash = createHash("sha256").update(apiKey).digest("hex");
-
-  const apiKeyRecord = await prisma.apiKey.findUnique({
-    where: { keyHash },
-    include: { user: true },
-  });
-
-  if (!apiKeyRecord) {
-    return NextResponse.json({ error: "Invalid API key" }, { status: 401 });
-  }
-
-  // Update last used timestamp
-  await prisma.apiKey.update({
-    where: { id: apiKeyRecord.id },
-    data: { lastUsed: new Date() },
-  });
-
-  const userId = await getHouseholdUserId(apiKeyRecord.userId);
-
+  const userId = auth.userId;
   const { name, url, price, category } = await req.json();
 
   if (!name || !url) {

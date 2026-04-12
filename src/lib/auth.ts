@@ -12,7 +12,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorization: {
         params: {
           scope:
-            "openid profile email https://www.googleapis.com/auth/calendar.readonly",
+            "openid profile email https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks",
           access_type: "offline",
           prompt: "consent",
         },

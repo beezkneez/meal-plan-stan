@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Meal Plan Stan - Add to Pantry",
-  "description": "Quickly add Walmart.ca products to your Meal Plan Stan pantry",
-  "version": "1.0.0",
-  "permissions": ["storage", "activeTab"],
+  "name": "Meal Plan Stan - Pantry & Cart",
+  "description": "Add Walmart.ca products to your pantry and auto-fill your Walmart cart from your meal plan",
+  "version": "2.0.0",
+  "permissions": ["storage", "activeTab", "tabs", "scripting"],
   "host_permissions": ["https://www.walmart.ca/*"],
   "content_scripts": [
     {
