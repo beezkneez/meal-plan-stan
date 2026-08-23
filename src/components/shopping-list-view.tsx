@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  ShoppingCart,
   Check,
   RefreshCw,
   ExternalLink,
@@ -125,6 +124,7 @@ export function ShoppingListView() {
   const [newItemName, setNewItemName] = useState("");
   const [addingItem, setAddingItem] = useState(false);
   const [clearingSource, setClearingSource] = useState("");
+  const [clearMessage, setClearMessage] = useState("");
   const [addingToPantry, setAddingToPantry] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,15 +175,35 @@ export function ShoppingListView() {
   }
 
   // Recipe and manual items are stored rows, so clearing them is a real delete.
+  // Always report the count — deleting nothing must not look like a broken button.
   async function clearSource(source: "recipe" | "manual") {
     setClearingSource(source);
+    setClearMessage("");
     try {
-      await fetch(`/api/shopping-list/items?source=${source}`, {
+      const res = await fetch(`/api/shopping-list/items?source=${source}`, {
         method: "DELETE",
       });
-      await loadList();
+      const data = await res.json();
+
+      if (!res.ok) {
+        setClearMessage(data.error || "Could not clear items");
+      } else if (data.deleted === 0) {
+        setClearMessage(
+          source === "recipe"
+            ? "No recipe items to clear"
+            : "No added items to clear"
+        );
+      } else {
+        setClearMessage(
+          `Removed ${data.deleted} item${data.deleted === 1 ? "" : "s"}`
+        );
+        await loadList();
+      }
+    } catch {
+      setClearMessage("Could not reach the server");
     } finally {
       setClearingSource("");
+      setTimeout(() => setClearMessage(""), 4000);
     }
   }
 
@@ -279,21 +299,8 @@ export function ShoppingListView() {
     );
   }
 
-  if (sections.length === 0 && activeTrip === "all") {
-    return (
-      <Card className="border-border/60 border-dashed">
-        <CardContent className="py-14 text-center">
-          <ShoppingCart className="h-14 w-14 mx-auto mb-4 text-muted-foreground/20" />
-          <p className="font-display text-lg font-semibold">
-            No shopping list yet
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Generate a meal plan first, then your shopping list will appear here.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
+  // No early return when the list is empty: the add box and filters below are
+  // how you put something on an empty list in the first place.
 
   return (
     <div className="space-y-5">
@@ -506,13 +513,19 @@ export function ShoppingListView() {
               </Button>
             </div>
           </div>
+
+          {clearMessage && (
+            <p className="text-xs text-muted-foreground">{clearMessage}</p>
+          )}
         </CardContent>
       </Card>
 
       {visibleSections.length === 0 ? (
         <Card className="border-border/60">
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
-            No items needed for this trip.
+            {sections.length === 0
+              ? "Nothing on the list yet. Add an item above, or add a recipe's ingredients from its page."
+              : "Nothing matches the filters you have on."}
           </CardContent>
         </Card>
       ) : (
