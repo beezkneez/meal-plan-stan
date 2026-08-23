@@ -22,6 +22,7 @@ import {
   X,
   Trash2,
   Star,
+  ShoppingCart,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -95,6 +96,8 @@ export function RecipeView({ id }: { id: string }) {
     new Set()
   );
   const [adjustedServings, setAdjustedServings] = useState<number | null>(null);
+  const [addingToList, setAddingToList] = useState(false);
+  const [listMessage, setListMessage] = useState("");
 
   // Edit mode
   const [editing, setEditing] = useState(false);
@@ -597,6 +600,35 @@ export function RecipeView({ id }: { id: string }) {
   const currentServings = adjustedServings ?? recipe.servings;
   const servingRatio = currentServings / recipe.servings;
 
+  // Push this recipe's ingredients onto the shopping list directly, scaled to
+  // whatever serving count is on screen — no meal plan involved.
+  async function addToShoppingList() {
+    if (!recipe) return;
+    setAddingToList(true);
+    setListMessage("");
+    try {
+      const res = await fetch("/api/shopping-list/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipeId: recipe.id,
+          servings: currentServings,
+        }),
+      });
+      const data = await res.json();
+      setListMessage(
+        res.ok
+          ? `Added ${data.added} item${data.added === 1 ? "" : "s"}`
+          : data.error || "Could not add to list"
+      );
+    } catch {
+      setListMessage("Could not reach the server");
+    } finally {
+      setAddingToList(false);
+      setTimeout(() => setListMessage(""), 3000);
+    }
+  }
+
   const ingredients = rawIngredients.map((ing) => ({
     ...ing,
     qty:
@@ -883,6 +915,19 @@ export function RecipeView({ id }: { id: string }) {
                   </span>
                 )}
               </p>
+            </div>
+            <div className="border-b border-border/60 px-5 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={addToShoppingList}
+                disabled={addingToList}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                {listMessage ||
+                  (addingToList ? "Adding..." : "Add to Shopping List")}
+              </Button>
             </div>
             <CardContent className="p-0">
               {[...sections.entries()].map(([section, items]) => (

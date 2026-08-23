@@ -62,6 +62,7 @@ model User {
   apiKeys          ApiKey[]
   cartQueueItems   CartQueueItem[]
   adHocItems       AdHocItem[]
+  shoppingListItems ShoppingListItem[]
   googleTasksSync  GoogleTasksSync?
 
   // Household sharing
@@ -314,4 +315,27 @@ model GoogleTasksSync {
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+// ── Shopping List Additions ──
+// Items added straight to the shopping list without going through a meal plan,
+// e.g. "add everything from this recipe". Meal-plan items are not stored here:
+// they are derived from the plan's slots every time the list is built.
+
+model ShoppingListItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name String
+  qty  Float  @default(1)
+  unit String @default("")
+
+  source      String  @default("recipe") // "recipe" | "manual"
+  recipeId    String?
+  recipeTitle String? // kept denormalised so the list still reads well if the recipe is deleted
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

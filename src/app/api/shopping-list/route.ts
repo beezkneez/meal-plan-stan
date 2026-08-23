@@ -65,38 +65,43 @@ export async function GET(req: Request) {
         include: { slots: { include: { recipe: true } } },
       });
 
-  if (!plan) {
-    return NextResponse.json({
-      sections: [],
-      trips: 1,
-      week: null,
-      planDays: 0,
-      message: "No meal plan found",
-    });
+  // A missing plan is no longer fatal — items added straight to the list
+  // (from a recipe, or typed in by hand) stand on their own.
+  let slots = plan?.slots ?? [];
+  let totalDays = 0;
+
+  if (plan) {
+    const planStart = new Date(plan.startDate);
+    totalDays =
+      Math.ceil(
+        (new Date(plan.endDate).getTime() - planStart.getTime()) /
+          (1000 * 60 * 60 * 24)
+      ) + 1;
+    const midpoint = Math.ceil(totalDays / 2);
+
+    if (week === "1") {
+      const cutoff = new Date(planStart);
+      cutoff.setDate(cutoff.getDate() + midpoint);
+      slots = slots.filter((s) => new Date(s.date) < cutoff);
+    } else if (week === "2") {
+      const cutoff = new Date(planStart);
+      cutoff.setDate(cutoff.getDate() + midpoint);
+      slots = slots.filter((s) => new Date(s.date) >= cutoff);
+    }
   }
 
-  // Filter slots by week if requested
-  let slots = plan.slots;
-  const planStart = new Date(plan.startDate);
-  const totalDays = Math.ceil(
-    (new Date(plan.endDate).getTime() - planStart.getTime()) / (1000 * 60 * 60 * 24)
-  ) + 1;
-  const midpoint = Math.ceil(totalDays / 2);
-
-  if (week === "1") {
-    const cutoff = new Date(planStart);
-    cutoff.setDate(cutoff.getDate() + midpoint);
-    slots = slots.filter((s) => new Date(s.date) < cutoff);
-  } else if (week === "2") {
-    const cutoff = new Date(planStart);
-    cutoff.setDate(cutoff.getDate() + midpoint);
-    slots = slots.filter((s) => new Date(s.date) >= cutoff);
-  }
-
-  // Aggregate ingredients from non-leftover slots
+  // Aggregate ingredients from non-leftover slots.
+  // `sources` records where each line came from so the UI can filter and clear
+  // by origin — one item can legitimately come from several places at once.
   const aggregated = new Map<
     string,
-    { name: string; qty: number; unit: string }
+    {
+      name: string;
+      qty: number;
+      unit: string;
+      sources: Set<string>;
+      recipeTitles: Set<string>;
+    }
   >();
 
   for (const slot of slots) {
@@ -119,13 +124,41 @@ export async function GET(req: Request) {
 
       if (existing) {
         existing.qty += scaledQty;
+        existing.sources.add("meal_plan");
       } else {
         aggregated.set(key, {
           name: cleanName,
           qty: scaledQty,
           unit: cleanUnit,
+          sources: new Set(["meal_plan"]),
+          recipeTitles: new Set<string>(),
         });
       }
+    }
+  }
+
+  // Fold in items added directly to the list, tagged by where they came from
+  const storedItems = await prisma.shoppingListItem.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const item of storedItems) {
+    const key = item.name.toLowerCase().trim();
+    const existing = aggregated.get(key);
+
+    if (existing) {
+      existing.qty += item.qty;
+      existing.sources.add(item.source);
+      if (item.recipeTitle) existing.recipeTitles.add(item.recipeTitle);
+    } else {
+      aggregated.set(key, {
+        name: item.name,
+        qty: item.qty,
+        unit: item.unit,
+        sources: new Set([item.source]),
+        recipeTitles: new Set(item.recipeTitle ? [item.recipeTitle] : []),
+      });
     }
   }
 
@@ -149,6 +182,8 @@ export async function GET(req: Request) {
     walmartUrl?: string | null;
     walmartUrlBackup?: string | null;
     walmartPricePreference?: string;
+    sources: string[];
+    recipeTitles: string[];
   }> = [];
 
   const pantryDeductions: Array<{ name: string; qty: number }> = [];
@@ -177,6 +212,8 @@ export async function GET(req: Request) {
       walmartUrl: matchedPantry?.walmartUrl ?? null,
       walmartUrlBackup: matchedPantry?.walmartUrlBackup ?? null,
       walmartPricePreference: matchedPantry?.walmartPricePreference ?? "best_price",
+      sources: [...item.sources],
+      recipeTitles: [...item.recipeTitles],
     });
   }
 

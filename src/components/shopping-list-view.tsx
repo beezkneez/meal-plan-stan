@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Package,
   Trash2,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,10 @@ interface GroceryItem {
   walmartUrl?: string | null;
   walmartUrlBackup?: string | null;
   walmartPricePreference?: string;
+  // Where this line came from: "meal_plan", "recipe", and/or "manual".
+  // An item can have several — the same onion can be needed by both.
+  sources?: string[];
+  recipeTitles?: string[];
 }
 
 interface GrocerySection {
@@ -33,6 +38,14 @@ interface GrocerySection {
 }
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Origins an item can have. Items predating this feature have no `sources`
+// field, so they are treated as meal-plan items.
+const SOURCE_FILTERS = [
+  { key: "meal_plan", label: "Meal plan" },
+  { key: "recipe", label: "Recipes" },
+  { key: "manual", label: "Added" },
+] as const;
 
 // Practical approximations for common items
 const PRACTICAL_UNITS: Record<string, { perUnit: number; label: string }> = {
@@ -106,6 +119,12 @@ export function ShoppingListView() {
   const [deducting, setDeducting] = useState(false);
   const [deducted, setDeducted] = useState(false);
   const [removedItems, setRemovedItems] = useState<Set<string>>(new Set());
+  const [visibleSources, setVisibleSources] = useState<Set<string>>(
+    new Set(["meal_plan", "recipe", "manual"])
+  );
+  const [newItemName, setNewItemName] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
+  const [clearingSource, setClearingSource] = useState("");
   const [addingToPantry, setAddingToPantry] = useState<string | null>(null);
 
   useEffect(() => {
@@ -134,6 +153,50 @@ export function ShoppingListView() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Add a one-off that isn't part of any recipe — snacks, cleaning supplies, etc.
+  async function addManualItem() {
+    const name = newItemName.trim();
+    if (!name) return;
+
+    setAddingItem(true);
+    try {
+      await fetch("/api/shopping-list/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [{ name, qty: 1, unit: "" }] }),
+      });
+      setNewItemName("");
+      await loadList();
+    } finally {
+      setAddingItem(false);
+    }
+  }
+
+  // Recipe and manual items are stored rows, so clearing them is a real delete.
+  async function clearSource(source: "recipe" | "manual") {
+    setClearingSource(source);
+    try {
+      await fetch(`/api/shopping-list/items?source=${source}`, {
+        method: "DELETE",
+      });
+      await loadList();
+    } finally {
+      setClearingSource("");
+    }
+  }
+
+  function toggleSource(source: string) {
+    setVisibleSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(source)) {
+        next.delete(source);
+      } else {
+        next.add(source);
+      }
+      return next;
+    });
   }
 
   function toggleItem(key: string) {
@@ -187,7 +250,23 @@ export function ShoppingListView() {
     }
   }
 
-  const totalItems = sections.reduce((sum, s) => sum + s.items.length, 0);
+  // Hide items whose every origin is filtered out. Items saved before sources
+  // existed default to meal_plan so they don't silently vanish.
+  const visibleSections = sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        (item.sources?.length ? item.sources : ["meal_plan"]).some((source) =>
+          visibleSources.has(source)
+        )
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
+
+  const totalItems = visibleSections.reduce(
+    (sum, s) => sum + s.items.length,
+    0
+  );
   const checkedCount = checked.size;
   const progress = totalItems > 0 ? (checkedCount / totalItems) * 100 : 0;
 
@@ -367,14 +446,77 @@ export function ShoppingListView() {
         </div>
       </div>
 
-      {sections.length === 0 ? (
+      {/* Add a one-off item, and filter/clear by where items came from */}
+      <Card className="border-border/60">
+        <CardContent className="space-y-4 py-4">
+          <div className="flex gap-2">
+            <Input
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addManualItem();
+              }}
+              placeholder="Add an item — chips, dog food, foil..."
+              className="flex-1"
+            />
+            <Button
+              onClick={addManualItem}
+              disabled={addingItem || !newItemName.trim()}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground mr-1">Show:</span>
+            {SOURCE_FILTERS.map((filter) => (
+              <button
+                key={filter.key}
+                onClick={() => toggleSource(filter.key)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  visibleSources.has(filter.key)
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border/60 text-muted-foreground hover:bg-accent/40"
+                )}
+              >
+                {filter.label}
+              </button>
+            ))}
+
+            <div className="ml-auto flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => clearSource("recipe")}
+                disabled={clearingSource === "recipe"}
+              >
+                Clear recipe items
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => clearSource("manual")}
+                disabled={clearingSource === "manual"}
+              >
+                Clear added items
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {visibleSections.length === 0 ? (
         <Card className="border-border/60">
           <CardContent className="py-8 text-center text-muted-foreground text-sm">
             No items needed for this trip.
           </CardContent>
         </Card>
       ) : (
-        sections.map((section) => (
+        visibleSections.map((section) => (
           <Card key={section.name} className="border-border/60 overflow-hidden">
             <CardHeader className="bg-muted/40 py-3 px-4">
               <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
