@@ -89,13 +89,16 @@ export async function POST(req: Request) {
 
   const excludedKeys = await getExcludedKeys(userId, plan?.id ?? null);
 
+  // One bucket per ingredient, shared by the meal plan and by items added
+  // straight to the shopping list — otherwise the same ingredient wanted by
+  // two sources becomes two queue lines and gets bought twice.
+  const aggregated = new Map<
+    string,
+    { name: string; qty: number; unit: string; source: string }
+  >();
+
   // Aggregate ingredients from meal plan (same logic as shopping-list route)
   if (plan) {
-    const aggregated = new Map<
-      string,
-      { name: string; qty: number; unit: string }
-    >();
-
     for (const slot of plan.slots) {
       if (slot.isLeftover || !slot.recipe) continue;
 
@@ -128,54 +131,46 @@ export async function POST(req: Request) {
             name: cleanName,
             qty: scaledQty,
             unit: cleanUnit,
+            source: "meal_plan",
           });
         }
       }
     }
 
-    // Subtract pantry and build queue items
-    for (const [key, item] of aggregated) {
-      const pantryItem = pantryMap.get(key);
-      let neededQty = item.qty;
-
-      if (pantryItem) {
-        neededQty = Math.max(0, item.qty - pantryItem.qtyOnHand);
-      }
-
-      if (neededQty <= 0) continue; // fully covered by pantry
-
-      const matched = pantryMap.get(key);
-      queueItems.push({
-        userId,
-        name: item.name,
-        qty: Math.round(neededQty * 100) / 100,
-        unit: item.unit,
-        section: classifyIngredient(item.name),
-        walmartUrl: matched?.walmartUrl ?? null,
-        walmartUrlBackup: matched?.walmartUrlBackup ?? null,
-        source: "meal_plan",
-        status: matched?.walmartUrl ? "pending" : "no_url",
-        weekOf,
-      });
-    }
   }
 
-  // Pull in items added straight to the shopping list — a recipe pushed to the
-  // list, or an extra typed in. Without this they show on the list but never
-  // reach the cart.
+  // Fold in items added straight to the shopping list — a recipe pushed to the
+  // list, or an extra typed in. These merge into the same buckets, so garlic
+  // wanted by both the plan and an added recipe is one line of 5 cloves rather
+  // than two lines that each get bought.
   const listItems = await prisma.shoppingListItem.findMany({
     where: { userId },
   });
 
   for (const item of listItems) {
     const key = item.name.toLowerCase().trim();
-    const pantryItem = pantryMap.get(key);
+    const existing = aggregated.get(key);
 
-    // Honour the pantry the same way meal-plan items do
+    if (existing) {
+      existing.qty += item.qty;
+    } else {
+      aggregated.set(key, {
+        name: item.name,
+        qty: item.qty,
+        unit: item.unit,
+        source: item.source === "manual" ? "manual" : "meal_plan",
+      });
+    }
+  }
+
+  // Subtract pantry and build exactly one queue line per ingredient
+  for (const [key, item] of aggregated) {
+    const pantryItem = pantryMap.get(key);
     const neededQty = pantryItem
       ? Math.max(0, item.qty - pantryItem.qtyOnHand)
       : item.qty;
-    if (neededQty <= 0) continue;
+
+    if (neededQty <= 0) continue; // fully covered by pantry
 
     queueItems.push({
       userId,
@@ -185,7 +180,7 @@ export async function POST(req: Request) {
       section: classifyIngredient(item.name),
       walmartUrl: pantryItem?.walmartUrl ?? null,
       walmartUrlBackup: pantryItem?.walmartUrlBackup ?? null,
-      source: item.source === "manual" ? "manual" : "meal_plan",
+      source: item.source,
       status: pantryItem?.walmartUrl ? "pending" : "no_url",
       weekOf,
     });
