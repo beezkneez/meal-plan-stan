@@ -3,6 +3,7 @@ import { DM_Sans, Fraunces, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { NavSidebar } from "@/components/nav-sidebar";
+import { AuthGate } from "@/components/auth-gate";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -41,7 +42,9 @@ export default function RootLayout({
         <Providers>
           <NavSidebar />
           <main className="md:pl-72">
-            <div className="mx-auto max-w-6xl p-5 md:p-10">{children}</div>
+            <div className="mx-auto max-w-6xl p-5 md:p-10">
+              <AuthGate>{children}</AuthGate>
+            </div>
           </main>
         </Providers>
       </body>
