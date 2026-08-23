@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyIngredient, getSectionOrder } from "@/lib/grocery-sections";
 import { getHouseholdUserId } from "@/lib/household";
+import { getExcludedKeys } from "@/lib/shopping-list-sources";
 import type { RecipeIngredient } from "@/types";
 
 // POST: deduct pantry items when shopping list is "used"
@@ -104,6 +105,10 @@ export async function GET(req: Request) {
     }
   >();
 
+  // Ingredients the user has cleared off this plan's list. Skipped entirely so
+  // they reach neither the list nor, later, the Walmart cart queue.
+  const excludedKeys = await getExcludedKeys(userId, plan?.id ?? null);
+
   for (const slot of slots) {
     if (slot.isLeftover || !slot.recipe) continue;
 
@@ -119,6 +124,8 @@ export async function GET(req: Request) {
       cleanName = cleanName.replace(/\s*,?\s*unit\(s\)\s*/gi, "").trim();
       const cleanUnit = junkUnits.test(ing.unit?.trim() ?? "") ? "" : (ing.unit ?? "");
       const key = cleanName.toLowerCase().trim();
+      if (excludedKeys.has(key)) continue;
+
       const existing = aggregated.get(key);
       const scaledQty = (ing.qty ?? 1) * scale;
 

@@ -63,6 +63,7 @@ model User {
   cartQueueItems   CartQueueItem[]
   adHocItems       AdHocItem[]
   shoppingListItems ShoppingListItem[]
+  shoppingListExclusions ShoppingListExclusion[]
   googleTasksSync  GoogleTasksSync?
 
   // Household sharing
@@ -338,4 +339,27 @@ model ShoppingListItem {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// ── Shopping List Exclusions ──
+// Meal-plan ingredients the user has cleared off the list. They cannot be
+// deleted like stored items because they are recomputed from the plan's slots
+// every load, so removal is recorded here instead. Scoped to one meal plan so
+// clearing this week does not silently suppress the same item next time.
+//
+// Honoured by the shopping list AND the Walmart cart queue — a cleared item
+// that still ended up in the cart would defeat the point of clearing it.
+
+model ShoppingListExclusion {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mealPlanId String
+  nameKey    String // lowercased, trimmed ingredient name
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, mealPlanId, nameKey])
+  @@index([userId, mealPlanId])
 }

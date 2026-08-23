@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { classifyIngredient } from "@/lib/grocery-sections";
 import { getHouseholdUserId } from "@/lib/household";
+import { getExcludedKeys } from "@/lib/shopping-list-sources";
 import type { RecipeIngredient } from "@/types";
 
 function getWeekStart(): Date {
@@ -86,6 +87,8 @@ export async function POST(req: Request) {
     weekOf: Date;
   }> = [];
 
+  const excludedKeys = await getExcludedKeys(userId, plan?.id ?? null);
+
   // Aggregate ingredients from meal plan (same logic as shopping-list route)
   if (plan) {
     const aggregated = new Map<
@@ -112,6 +115,9 @@ export async function POST(req: Request) {
           ? ""
           : (ing.unit ?? "");
         const key = cleanName.toLowerCase().trim();
+        // Items cleared off the shopping list must not sneak into the cart
+        if (excludedKeys.has(key)) continue;
+
         const existing = aggregated.get(key);
         const scaledQty = (ing.qty ?? 1) * scale;
 
@@ -152,6 +158,37 @@ export async function POST(req: Request) {
         weekOf,
       });
     }
+  }
+
+  // Pull in items added straight to the shopping list — a recipe pushed to the
+  // list, or an extra typed in. Without this they show on the list but never
+  // reach the cart.
+  const listItems = await prisma.shoppingListItem.findMany({
+    where: { userId },
+  });
+
+  for (const item of listItems) {
+    const key = item.name.toLowerCase().trim();
+    const pantryItem = pantryMap.get(key);
+
+    // Honour the pantry the same way meal-plan items do
+    const neededQty = pantryItem
+      ? Math.max(0, item.qty - pantryItem.qtyOnHand)
+      : item.qty;
+    if (neededQty <= 0) continue;
+
+    queueItems.push({
+      userId,
+      name: item.name,
+      qty: Math.round(neededQty * 100) / 100,
+      unit: item.unit,
+      section: classifyIngredient(item.name),
+      walmartUrl: pantryItem?.walmartUrl ?? null,
+      walmartUrlBackup: pantryItem?.walmartUrlBackup ?? null,
+      source: item.source === "manual" ? "manual" : "meal_plan",
+      status: pantryItem?.walmartUrl ? "pending" : "no_url",
+      weekOf,
+    });
   }
 
   // Pull in unimported ad-hoc items (from Google Tasks)

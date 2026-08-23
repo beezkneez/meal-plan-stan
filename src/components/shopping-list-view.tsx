@@ -232,8 +232,72 @@ export function ShoppingListView() {
     });
   }
 
-  function removeItem(key: string) {
+  // Persist the removal rather than just hiding it. A hidden-but-not-cleared
+  // item would still be picked up when building the Walmart cart.
+  async function removeItem(key: string, itemName: string) {
     setRemovedItems((prev) => new Set([...prev, key]));
+
+    await fetch("/api/shopping-list/exclusions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names: [itemName] }),
+    }).catch(() => {
+      // Falls back to the local hide; the next load will show it again
+    });
+  }
+
+  // Clear everything the meal plan contributes, leaving the plan itself alone
+  async function clearMealPlanItems() {
+    setClearingSource("meal_plan");
+    setClearMessage("");
+    try {
+      const res = await fetch("/api/shopping-list/exclusions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allMealPlan: true }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setClearMessage(data.error || "Could not clear meal-plan items");
+      } else if (data.excluded === 0) {
+        setClearMessage("No meal-plan items to clear");
+      } else {
+        setClearMessage(
+          `Cleared ${data.excluded} meal-plan item${data.excluded === 1 ? "" : "s"} — your plan is untouched`
+        );
+        await loadList();
+      }
+    } catch {
+      setClearMessage("Could not reach the server");
+    } finally {
+      setClearingSource("");
+      setTimeout(() => setClearMessage(""), 5000);
+    }
+  }
+
+  // Put back everything cleared off this plan's list
+  async function restoreMealPlanItems() {
+    setClearingSource("restore");
+    setClearMessage("");
+    try {
+      const res = await fetch("/api/shopping-list/exclusions?all=true", {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      setClearMessage(
+        data.restored > 0
+          ? `Restored ${data.restored} item${data.restored === 1 ? "" : "s"}`
+          : "Nothing to restore"
+      );
+      setRemovedItems(new Set());
+      await loadList();
+    } catch {
+      setClearMessage("Could not reach the server");
+    } finally {
+      setClearingSource("");
+      setTimeout(() => setClearMessage(""), 5000);
+    }
   }
 
   async function addToPantry(item: GroceryItem, sectionName: string) {
@@ -507,7 +571,24 @@ export function ShoppingListView() {
               </button>
             ))}
 
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={clearMealPlanItems}
+                disabled={clearingSource === "meal_plan"}
+              >
+                Clear meal-plan items
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={restoreMealPlanItems}
+                disabled={clearingSource === "restore"}
+              >
+                Restore cleared
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -652,7 +733,7 @@ export function ShoppingListView() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeItem(key);
+                            removeItem(key, item.name);
                           }}
                           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
                           title="Remove from list"
