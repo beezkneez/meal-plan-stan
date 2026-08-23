@@ -10,6 +10,9 @@ chrome.runtime.onInstalled.addListener(() => {
 let cartQueueRunning = false;
 let cartQueueProgress = { current: 0, total: 0, results: [] };
 
+let autoMatchRunning = false;
+let autoMatchProgress = { current: 0, total: 0, results: [] };
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "startCartQueue") {
     if (cartQueueRunning) {
@@ -24,6 +27,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({
       running: cartQueueRunning,
       ...cartQueueProgress,
+    });
+  }
+
+  if (msg.action === "startAutoMatch") {
+    if (autoMatchRunning) {
+      sendResponse({ error: "Auto-match already running" });
+      return;
+    }
+    if (cartQueueRunning) {
+      sendResponse({ error: "Cart queue is running — wait for it to finish" });
+      return;
+    }
+    startAutoMatch();
+    sendResponse({ started: true });
+  }
+
+  if (msg.action === "getMatchProgress") {
+    sendResponse({
+      running: autoMatchRunning,
+      ...autoMatchProgress,
     });
   }
 });
@@ -144,6 +167,137 @@ async function startCartQueue() {
     cartQueueRunning = false;
     broadcastProgress({ error: err.message });
   }
+}
+
+// ── Auto-Match Orchestrator ──
+// For every queue item with no Walmart link: search walmart.ca, scrape the
+// top results, then let the app pick the best product for each.
+
+async function startAutoMatch() {
+  autoMatchRunning = true;
+  autoMatchProgress = { current: 0, total: 0, results: [] };
+
+  try {
+    const { apiKey, appUrl } = await chrome.storage.sync.get([
+      "apiKey",
+      "appUrl",
+    ]);
+
+    if (!apiKey || !appUrl) {
+      autoMatchRunning = false;
+      broadcastMatchProgress({ error: "Extension not configured" });
+      return;
+    }
+
+    const res = await fetch(`${appUrl}/api/walmart/match`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    if (!res.ok) {
+      autoMatchRunning = false;
+      broadcastMatchProgress({ error: "Failed to fetch unmatched items" });
+      return;
+    }
+
+    const { items } = await res.json();
+    autoMatchProgress.total = items.length;
+
+    if (items.length === 0) {
+      autoMatchRunning = false;
+      broadcastMatchProgress({ done: true, message: "Nothing to match" });
+      return;
+    }
+
+    const scraped = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      autoMatchProgress.current = i + 1;
+      broadcastMatchProgress();
+
+      const candidates = await scrapeSearch(item.searchUrl);
+      scraped.push({ id: item.id, candidates });
+
+      // Same pacing as the cart run — search pages are rate-limited too
+      if (i < items.length - 1) {
+        await sleep(3000 + Math.random() * 2000);
+      }
+    }
+
+    // Hand every item to the app at once — one Claude call for the whole list
+    const matchRes = await fetch(`${appUrl}/api/walmart/match`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ items: scraped }),
+    });
+
+    if (!matchRes.ok) {
+      const detail = await matchRes.text();
+      autoMatchRunning = false;
+      broadcastMatchProgress({
+        error: `Matching failed: ${detail.slice(0, 120)}`,
+      });
+      return;
+    }
+
+    const summary = await matchRes.json();
+    autoMatchProgress.results = summary.results || [];
+
+    autoMatchRunning = false;
+    broadcastMatchProgress({
+      done: true,
+      matched: summary.matched,
+      unmatched: summary.unmatched,
+    });
+  } catch (err) {
+    console.error("Auto-match error:", err);
+    autoMatchRunning = false;
+    broadcastMatchProgress({ error: err.message });
+  }
+}
+
+async function scrapeSearch(searchUrl) {
+  let tab;
+  try {
+    tab = await chrome.tabs.create({ url: searchUrl, active: false });
+    await waitForTabLoad(tab.id);
+
+    // Search results hydrate client-side — give them a moment
+    await sleep(2500);
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["search-scraper.js"],
+    });
+
+    return results?.[0]?.result?.candidates ?? [];
+  } catch (err) {
+    console.error("Error scraping search:", searchUrl, err);
+    return [];
+  } finally {
+    if (tab?.id) {
+      try {
+        await chrome.tabs.remove(tab.id);
+      } catch (_) {
+        // Tab may already be closed
+      }
+    }
+  }
+}
+
+function broadcastMatchProgress(extra = {}) {
+  chrome.runtime
+    .sendMessage({
+      type: "matchProgress",
+      ...autoMatchProgress,
+      ...extra,
+    })
+    .catch(() => {
+      // Popup may be closed
+    });
 }
 
 async function processItem(item) {
