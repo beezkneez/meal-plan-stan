@@ -40,10 +40,14 @@ const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Origins an item can have. Items predating this feature have no `sources`
 // field, so they are treated as meal-plan items.
+//
+// "Meal plan" and "Recipes" both ultimately come from recipes, so the labels
+// spell out the difference: planned meals vs. a recipe you pushed to the list
+// yourself. Counts are shown alongside so an empty group is obvious.
 const SOURCE_FILTERS = [
-  { key: "meal_plan", label: "Meal plan" },
-  { key: "recipe", label: "Recipes" },
-  { key: "manual", label: "Added" },
+  { key: "meal_plan", label: "From meal plan" },
+  { key: "recipe", label: "Added recipes" },
+  { key: "manual", label: "Extras" },
 ] as const;
 
 // Practical approximations for common items
@@ -190,8 +194,8 @@ export function ShoppingListView() {
       } else if (data.deleted === 0) {
         setClearMessage(
           source === "recipe"
-            ? "No recipe items to clear"
-            : "No added items to clear"
+            ? "Nothing to clear — these buttons only remove items you added yourself. Meal-plan items come from your plan."
+            : "No extras to clear — nothing has been typed in."
         );
       } else {
         setClearMessage(
@@ -267,6 +271,17 @@ export function ShoppingListView() {
       setActiveTrip("all");
     } else {
       setActiveTrip("1");
+    }
+  }
+
+  // How many items each origin contributes, so the filter chips can show it.
+  // An item counts once per origin it has.
+  const sourceCounts: Record<string, number> = {};
+  for (const section of sections) {
+    for (const item of section.items) {
+      for (const source of item.sources?.length ? item.sources : ["meal_plan"]) {
+        sourceCounts[source] = (sourceCounts[source] ?? 0) + 1;
+      }
     }
   }
 
@@ -488,7 +503,7 @@ export function ShoppingListView() {
                     : "border-border/60 text-muted-foreground hover:bg-accent/40"
                 )}
               >
-                {filter.label}
+                {filter.label} ({sourceCounts[filter.key] ?? 0})
               </button>
             ))}
 
@@ -500,7 +515,7 @@ export function ShoppingListView() {
                 onClick={() => clearSource("recipe")}
                 disabled={clearingSource === "recipe"}
               >
-                Clear recipe items
+                Clear added recipes
               </Button>
               <Button
                 variant="ghost"
@@ -509,7 +524,7 @@ export function ShoppingListView() {
                 onClick={() => clearSource("manual")}
                 disabled={clearingSource === "manual"}
               >
-                Clear added items
+                Clear extras
               </Button>
             </div>
           </div>
