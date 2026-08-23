@@ -26,8 +26,28 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { RecipeIngredient } from "@/types";
+
+// One line of the "what will actually be added" confirmation
+type PreviewItem = {
+  name: string;
+  unit: string;
+  needed: number;
+  onHand: number;
+  toAdd: number;
+  covered: boolean;
+  inPantry: boolean;
+  include: boolean;
+};
 
 interface RecipeData {
   id: string;
@@ -98,6 +118,9 @@ export function RecipeView({ id }: { id: string }) {
   const [adjustedServings, setAdjustedServings] = useState<number | null>(null);
   const [addingToList, setAddingToList] = useState(false);
   const [listMessage, setListMessage] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
 
   // Edit mode
   const [editing, setEditing] = useState(false);
@@ -600,19 +623,53 @@ export function RecipeView({ id }: { id: string }) {
   const currentServings = adjustedServings ?? recipe.servings;
   const servingRatio = currentServings / recipe.servings;
 
-  // Push this recipe's ingredients onto the shopping list directly, scaled to
-  // whatever serving count is on screen — no meal plan involved.
-  async function addToShoppingList() {
+  // Show what would land on the list once the pantry is deducted, before
+  // committing anything — a stale pantry count is caught here, not in the shop.
+  async function openPreview() {
     if (!recipe) return;
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(
+        `/api/shopping-list/preview?recipeId=${recipe.id}&servings=${currentServings}`
+      );
+      const data = await res.json();
+      setPreviewItems(
+        (data.items ?? []).map((item: Omit<PreviewItem, "include">) => ({
+          ...item,
+          // Anything the pantry already covers starts unticked
+          include: !item.covered,
+        }))
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function updatePreviewItem(index: number, changes: Partial<PreviewItem>) {
+    setPreviewItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...changes } : item))
+    );
+  }
+
+  // Commit exactly the lines that are ticked, at the quantities on screen
+  async function confirmAddToList() {
+    if (!recipe) return;
+    const chosen = previewItems.filter((i) => i.include && i.toAdd > 0);
+    if (chosen.length === 0) return;
+
     setAddingToList(true);
-    setListMessage("");
     try {
       const res = await fetch("/api/shopping-list/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recipeId: recipe.id,
-          servings: currentServings,
+          items: chosen.map((i) => ({
+            name: i.name,
+            qty: i.toAdd,
+            unit: i.unit,
+          })),
         }),
       });
       const data = await res.json();
@@ -621,6 +678,7 @@ export function RecipeView({ id }: { id: string }) {
           ? `Added ${data.added} item${data.added === 1 ? "" : "s"}`
           : data.error || "Could not add to list"
       );
+      setPreviewOpen(false);
     } catch {
       setListMessage("Could not reach the server");
     } finally {
@@ -921,7 +979,7 @@ export function RecipeView({ id }: { id: string }) {
                 variant="outline"
                 size="sm"
                 className="w-full gap-2"
-                onClick={addToShoppingList}
+                onClick={openPreview}
                 disabled={addingToList}
               >
                 <ShoppingCart className="h-4 w-4" />
@@ -1021,6 +1079,92 @@ export function RecipeView({ id }: { id: string }) {
           </div>
         </div>
       </div>
+
+      {/* Confirm what actually gets added, after the pantry is deducted */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              Add to shopping list
+            </DialogTitle>
+            <DialogDescription>
+              Quantities below already have your pantry subtracted. Untick
+              anything you don&apos;t need, or change an amount.
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : (
+            <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+              {previewItems.map((item, i) => (
+                <div
+                  key={`${item.name}-${i}`}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2",
+                    !item.include && "opacity-50"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.include}
+                    onChange={(e) =>
+                      updatePreviewItem(i, { include: e.target.checked })
+                    }
+                    className="h-4 w-4 shrink-0 accent-primary"
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Need {item.needed}
+                      {item.unit ? ` ${item.unit}` : ""}
+                      {item.inPantry
+                        ? ` · have ${item.onHand}`
+                        : " · not in pantry"}
+                      {item.covered && " · already covered"}
+                    </p>
+                  </div>
+
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={item.toAdd}
+                    onChange={(e) =>
+                      updatePreviewItem(i, {
+                        toAdd: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="h-8 w-20 shrink-0 text-right"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmAddToList}
+              disabled={
+                addingToList ||
+                previewItems.filter((i) => i.include && i.toAdd > 0).length === 0
+              }
+            >
+              Add{" "}
+              {previewItems.filter((i) => i.include && i.toAdd > 0).length} item
+              {previewItems.filter((i) => i.include && i.toAdd > 0).length === 1
+                ? ""
+                : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

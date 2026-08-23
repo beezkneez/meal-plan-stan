@@ -42,6 +42,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
 
+    // The approval dialog sends the exact lines the user confirmed, already
+    // netted against the pantry and possibly edited. Trust them over the
+    // recipe's own quantities.
+    if (Array.isArray(body.items)) {
+      const created = await prisma.shoppingListItem.createMany({
+        data: body.items
+          .filter((i: { name?: string }) => i.name?.trim())
+          .map((i: { name: string; qty?: number; unit?: string }) => ({
+            userId,
+            name: i.name.trim(),
+            qty: Number(i.qty) || 1,
+            unit: i.unit ?? "",
+            source: "recipe",
+            recipeId: recipe.id,
+            recipeTitle: recipe.title,
+          })),
+      });
+
+      return NextResponse.json({ added: created.count, recipe: recipe.title });
+    }
+
     const ingredients: RecipeIngredient[] = JSON.parse(recipe.ingredients);
 
     // Scale if the caller wants a different batch size than the recipe's default
