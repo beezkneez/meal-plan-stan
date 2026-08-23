@@ -64,6 +64,7 @@ export function MealPlanGrid() {
   const [plan, setPlan] = useState<MealPlanData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
   const [showBuilder, setShowBuilder] = useState(false);
 
   // Builder settings - default to next Monday
@@ -373,6 +374,7 @@ export function MealPlanGrid() {
 
   async function generatePlan() {
     setGenerating(true);
+    setGenerateError("");
     try {
       const res = await fetch("/api/meal-plan", {
         method: "POST",
@@ -394,7 +396,21 @@ export function MealPlanGrid() {
         const data = await res.json();
         setPlan(data);
         setShowBuilder(false);
+      } else {
+        // Surface the reason instead of leaving the button to stop silently —
+        // e.g. "Set up your work schedule first" comes back as a 400 here.
+        const detail = await res
+          .json()
+          .then((d) => d?.error)
+          .catch(() => null);
+        setGenerateError(
+          detail || `Could not generate a plan (error ${res.status})`
+        );
       }
+    } catch (err) {
+      setGenerateError(
+        err instanceof Error ? err.message : "Could not reach the server"
+      );
     } finally {
       setGenerating(false);
     }
@@ -697,6 +713,11 @@ export function MealPlanGrid() {
             </div>
 
             {/* Generate button */}
+            {generateError && (
+              <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                {generateError}
+              </div>
+            )}
             <Button
               onClick={generatePlan}
               disabled={generating}
